@@ -6,16 +6,16 @@
 #   ImageMagick
 #   googlecl (http://code.google.com/p/googlecl/)
 # Synopsis
-#   y-picasa-upload [options] picture_dir
+#   y-picasa-upload [options] picture_dir album_name
 #     options     - any combination of 'R'
 #     picture_dir - directory with photos. Mandatory
+#     album_name  - name of the destination Picasa album
 #=======================================================================================================================
 
 # Setup vars
 pic_size=1600                                          # Max size of the pictures to upload
 file_watermark="$HOME/Pictures/Misc/dk-watermark.png"  # Watermark file
 picasa_owner="dmitry.kann"                             # Owner of the Picasa account
-picasa_album_name="2011 — 2"                           # Name of the destination Picasa album
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -56,7 +56,7 @@ err() {
 #   none
 usage() {
   cat << EOF
-Usage: $0 [options] photos_dir
+Usage: $0 [options] photos_dir album_name
 Options:
   -D  Do not delete the photos after uploading (leave them in the source dir)
   -R  Do not resize photos to $pic_size pixels
@@ -99,13 +99,16 @@ for i; do
   esac
 done
 
-dir_photos=$1
-[ -z "$dir_photos" ] && usage
-[ -d "$dir_photos" ] || err "Directory '$dir_photos' does not exist."
+dir_photos="$1"
+picasa_album_name="$2"
+
+[ ! -z "$dir_photos" ]        || usage
+[ ! -z "$picasa_album_name" ] || usage
+[ -d "$dir_photos" ]          || err "Directory '$dir_photos' does not exist."
 
 [ $b_resize -ne 0 ] && convert_flags="-resize $pic_size"
 
-find "$dir_photos" -type f -iname '*.jpg' ! -name '*.picasaweb.*' -print |
+find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.picasaweb.*' -print |
   while read src_file; do
     dst_file=${src_file%\.*}.picasaweb.jpg
     info "Processing $src_file -> $dst_file" &&
