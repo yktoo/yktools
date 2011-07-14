@@ -74,9 +74,9 @@ b_resize=1
 b_upload=1
 
 # Parse the command line
-args=$(getopt DRU $*)
+args=$(getopt -o DRU -- "$@")
 [ $? -ne 0 ] && usage
-set -- $args
+eval set -- $args
 for i; do
   case "$i" in
     -D)
