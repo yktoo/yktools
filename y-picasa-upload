@@ -13,9 +13,10 @@
 #=======================================================================================================================
 
 # Setup vars
-pic_size=1600                                          # Max size of the pictures to upload
-file_watermark="$HOME/Pictures/Misc/dk-watermark.png"  # Watermark file
-picasa_owner="dmitry.kann"                             # Owner of the Picasa account
+pic_size=1600                                                      # Max size of the pictures to upload
+file_watermark="$HOME/Pictures/Misc/dk-watermark.png"              # Watermark file
+file_watermark_small="$HOME/Pictures/Misc/dk-watermark-small.png"  # 'Small' watermark file
+picasa_owner="dmitry.kann"                                         # Owner of the Picasa account
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -53,14 +54,18 @@ err() {
 
 # Displays usage info and exits
 # Parameters:
-#   none
+#   1 - error message (if any)
 usage() {
+  [ -z "$1" ] || log "-  $1"
   cat << EOF
 Usage: $0 [options] photos_dir album_name
 Options:
   -D  Do not delete the photos after uploading (leave them in the source dir)
   -R  Do not resize photos to $pic_size pixels
   -U  Do not upload the photos to Picasa (implies -D)
+  -s  Use "small" watermark instead of the default one (more appropriate for smaller images)
+
+album_name is mandatory unless -U is specified.
 EOF
   exit 2
 }
@@ -69,12 +74,13 @@ EOF
 # Main routine
 #-----------------------------------------------------------------------------------------------------------------------
 
+# Parse command line options
 b_delete=1
 b_resize=1
 b_upload=1
+s_watermark_to_use="$file_watermark"
 
-# Parse the command line
-args=$(getopt -o DRU -- "$@")
+args=$(getopt -o DRUs -- "$@")
 [ $? -ne 0 ] && usage
 eval set -- $args
 for i; do
@@ -92,6 +98,10 @@ for i; do
       b_upload=0
       shift
       ;;
+    -s)
+      s_watermark_to_use="$file_watermark_small"
+      shift
+      ;;
     --)
       shift;
       break
@@ -99,12 +109,16 @@ for i; do
   esac
 done
 
+# Parse the rest of the command line
 dir_photos="$1"
 picasa_album_name="$2"
 
-[ ! -z "$dir_photos" ]        || usage
-[ ! -z "$picasa_album_name" ] || usage
-[ -d "$dir_photos" ]          || err "Directory '$dir_photos' does not exist."
+# Check photos_dir
+[ ! -z "$dir_photos" ] || usage "Directory for photos is not specified"
+[ -d "$dir_photos" ]   || err "Directory '$dir_photos' does not exist."
+
+# Check album_name
+[ $b_upload -eq 0 ] || [ ! -z "$picasa_album_name" ] || usage "Album name is not specified"
 
 [ $b_resize -ne 0 ] && convert_flags="-resize $pic_size"
 
@@ -115,7 +129,7 @@ find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.pic
       # Resize and autorotate the image
       convert $convert_flags -quality 90 -auto-orient "$src_file" "$dst_file" &&
       # Apply watermark
-      composite -blend 90% -gravity southeast "$file_watermark" "$dst_file" "$dst_file" &&
+      composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" &&
       # Upload the picture
       ( [ $b_upload -eq 0 ] || google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" ) &&
       # Remove the handled picture
