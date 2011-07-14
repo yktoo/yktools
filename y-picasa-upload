@@ -1,0 +1,80 @@
+#!/bin/bash
+#=======================================================================================================================
+# Description
+#   Script for automated upload of photos to picasa
+# Requires
+#   ImageMagick
+#   googlecl (http://code.google.com/p/googlecl/)
+# Parameters
+#   1 - directory with photos. Mandatory
+#=======================================================================================================================
+
+# Setup vars
+dir_photos=$1
+pic_size=1600                                          # Max size of the pictures to upload
+file_watermark="$HOME/Pictures/Misc/dk-watermark.png"  # Watermark file
+picasa_owner="dmitry.kann"                             # Owner of the Picasa account
+picasa_album_name="2011 — 2"                           # Name of the destination Picasa album
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+
+
+# Logs a message
+# Parameters:
+#   1 - message
+log() {
+  echo "$(date +%H:%M:%S)  $1"
+}
+
+# Logs a normal message
+# Parameters:
+#   1 - message
+info() {
+  log "   $1"
+}
+
+# Logs a success message
+# Parameters:
+#   1 - message
+ok() {
+  log "+  $1"
+}
+
+# Logs a failure message
+# Parameters:
+#   1 - message
+err() {
+  log "-  $1"
+}
+
+# Displays usage info and exits
+# Parameters:
+#   none
+usage() {
+  echo "Usage: $0 photos_dir"
+  exit 1      
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Main routine
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Check the parameters
+[ -z "$dir_photos" ] && usage
+[ -d "$dir_photos" ] || err "Directory '$dir_photos' does not exist."
+
+find "$dir_photos" -type f -iname '*.jpg' ! -name '*.picasaweb.*' -print |
+  while read src_file; do
+    dst_file=${src_file%\.*}.picasaweb.jpg
+    info "Processing $src_file -> $dst_file" &&
+      # Resize and autorotate the image
+      convert -resize $pic_size -quality 90 -auto-orient "$src_file" "$dst_file" &&
+      # Apply watermark
+      composite -blend 90% -gravity southeast "$file_watermark" "$dst_file" "$dst_file" &&
+      # Upload the picture
+      google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" &&
+      # Remove the handled picture
+      rm -f "$dst_file"
+  done
