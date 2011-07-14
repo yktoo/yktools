@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Exports DBUS variable which is not set when called from cron session
+export_variables() {
+  user=$(whoami)
+  pid=$(pgrep -u $user gnome-panel)
+  for dbusenv in $pid; do
+    DBUS_SESSION_BUS_ADDRESS=$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/$pid/environ | sed -e 's/DBUS_SESSION_BUS_ADDRESS=//')
+    data="DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
+    eval "export $data"
+  done
+}
+
+# Fill array with picture files (replace spaces with colons to fool the array)
+files=( $(find $HOME/Pictures/Wallpapers/iMac -type f \( -name '*.jpeg' -o -name '*.jpg' -o -name '*.png' \) | sed s/' '/':'/g) )
+# Get number of members in the array
+N=${#files[@]}
+# Randomize N
+((N=RANDOM%N))
+# Get the normal file name (change colons back to spaces)
+file=${files[$N]//:/ }
+# Change desktop wallpaper
+export_variables
+gconftool-2 --type string --set /desktop/gnome/background/picture_filename "$file"
