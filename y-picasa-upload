@@ -5,12 +5,13 @@
 # Requires
 #   ImageMagick
 #   googlecl (http://code.google.com/p/googlecl/)
-# Parameters
-#   1 - directory with photos. Mandatory
+# Synopsis
+#   y-picasa-upload [options] picture_dir
+#     options     - any combination of 'R'
+#     picture_dir - directory with photos. Mandatory
 #=======================================================================================================================
 
 # Setup vars
-dir_photos=$1
 pic_size=1600                                          # Max size of the pictures to upload
 file_watermark="$HOME/Pictures/Misc/dk-watermark.png"  # Watermark file
 picasa_owner="dmitry.kann"                             # Owner of the Picasa account
@@ -47,34 +48,73 @@ ok() {
 #   1 - message
 err() {
   log "-  $1"
+  exit 1
 }
 
 # Displays usage info and exits
 # Parameters:
 #   none
 usage() {
-  echo "Usage: $0 photos_dir"
-  exit 1      
+  cat << EOF
+Usage: $0 [options] photos_dir
+Options:
+  -D  Do not delete the photos after uploading (leave them in the source dir)
+  -R  Do not resize photos to $pic_size pixels
+  -U  Do not upload the photos to Picasa (implies -D)
+EOF
+  exit 2
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Main routine
 #-----------------------------------------------------------------------------------------------------------------------
 
-# Check the parameters
+b_delete=1
+b_resize=1
+b_upload=1
+
+# Parse the command line
+args=$(getopt DRU $*)
+[ $? -ne 0 ] && usage
+set -- $args
+for i; do
+  case "$i" in
+    -D)
+      b_delete=0
+      shift
+      ;;
+    -R)
+      b_resize=0
+      shift
+      ;;
+    -U)
+      b_delete=0
+      b_upload=0
+      shift
+      ;;
+    --)
+      shift;
+      break
+      ;;    
+  esac
+done
+
+dir_photos=$1
 [ -z "$dir_photos" ] && usage
 [ -d "$dir_photos" ] || err "Directory '$dir_photos' does not exist."
+
+[ $b_resize -ne 0 ] && convert_flags="-resize $pic_size"
 
 find "$dir_photos" -type f -iname '*.jpg' ! -name '*.picasaweb.*' -print |
   while read src_file; do
     dst_file=${src_file%\.*}.picasaweb.jpg
     info "Processing $src_file -> $dst_file" &&
       # Resize and autorotate the image
-      convert -resize $pic_size -quality 90 -auto-orient "$src_file" "$dst_file" &&
+      convert $convert_flags -quality 90 -auto-orient "$src_file" "$dst_file" &&
       # Apply watermark
       composite -blend 90% -gravity southeast "$file_watermark" "$dst_file" "$dst_file" &&
       # Upload the picture
-      google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" &&
+      ( [ $b_upload -eq 0 ] || google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" ) &&
       # Remove the handled picture
-      rm -f "$dst_file"
+      ( [ $b_delete -eq 0 ] || rm -f "$dst_file" )
   done
