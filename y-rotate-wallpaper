@@ -22,6 +22,5 @@ N=${#files[@]}
 # Get the normal file name (change colons back to spaces)
 file=${files[$N]//:/ }
 # Change desktop wallpaper
-export_variables
 gsettings set org.gnome.desktop.background picture-uri "file://$file"
 
