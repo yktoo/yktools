@@ -1,7 +1,7 @@
 #!/bin/bash
 #=======================================================================================================================
 # Description
-#   Script to set a random wallpaper in Gnome/Unity
+#   Script to set a random wallpaper in Gnome 3/Unity
 # Synopsis
 #   y-rotate-wallpaper
 # Author
@@ -13,17 +13,6 @@
 # Setup vars
 dir_wallpapers="$HOME/Pictures/Wallpapers/iMac"  # Path to wallpaper directory
 
-# Exports DBUS variable which is not set when called from cron session
-export_variables() {
-  user=$(whoami)
-  pid=$(pgrep -u $user gnome-panel)
-  for dbusenv in $pid; do
-    DBUS_SESSION_BUS_ADDRESS=$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/$pid/environ | sed -e 's/DBUS_SESSION_BUS_ADDRESS=//')
-    data="DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
-    eval "export $data"
-  done
-}
-
 # Fill array with picture files (replace spaces with colons to fool the array)
 files=( $(find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) | sed s/' '/':'/g) )
 # Get number of members in the array
@@ -34,4 +23,5 @@ N=${#files[@]}
 file=${files[$N]//:/ }
 # Change desktop wallpaper
 export_variables
-gconftool-2 --type string --set /desktop/gnome/background/picture_filename "$file"
+gsettings set org.gnome.desktop.background picture-uri "file://$file"
+
