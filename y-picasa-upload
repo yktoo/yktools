@@ -23,33 +23,36 @@ picasa_owner="dmitry.kann"                                         # Owner of th
 # Functions
 #-----------------------------------------------------------------------------------------------------------------------
 
-
-# Logs a message
+# Prints out a status message (overwritten every time)
 # Parameters:
-#   1 - message
-log() {
-  echo "$(date +%H:%M:%S)  $1"
+#   1 - message text
+status() {
+  # Pad/truncate the line to fit screen width
+  printf "%-${tty_width}.${tty_width}s\r" "$1"
 }
 
-# Logs a normal message
+# Prints out a progress message
 # Parameters:
-#   1 - message
-info() {
-  log "   $1"
+#   1 - current item number
+#   2 - total number of items
+#   3 - message text
+progress() {
+  printf -v msg '[%d/%d] %s' "$1" "$2" "$3"
+  status "$msg"
 }
 
-# Logs a success message
+# Prints out a warning message
 # Parameters:
 #   1 - message
-ok() {
-  log "+  $1"
+warn() {
+  echo "WARNING: $1" >&2
 }
 
-# Logs a failure message
+# Prints out a failure message and exits
 # Parameters:
 #   1 - message
 err() {
-  log "-  $1"
+  echo "ERROR: $1" >&2
   exit 1
 }
 
@@ -57,8 +60,8 @@ err() {
 # Parameters:
 #   1 - error message (if any)
 usage() {
-  [ -z "$1" ] || log "-  $1"
-  cat << EOF
+  [ -z "$1" ] || echo "ERROR: $1" >&2
+  cat << EOF >&2
 Usage: $0 [options] photos_dir album_name
 Options:
   -B  Do not add a black border to the image
@@ -74,8 +77,12 @@ EOF
   exit 2
 }
 
-#-----------------------------------------------------------------------------------------------------------------------
+#=======================================================================================================================
 # Main routine
+#=======================================================================================================================
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Parse and check the command line
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Parse command line options
@@ -140,25 +147,99 @@ picasa_album_name="$2"
 
 [ $b_resize -ne 0 ] && convert_flags="-resize $pic_size"
 
-find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.picasaweb.*' -print |
-  sort |
-  while read src_file; do
-    file_ext=$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')
-    dst_file=${src_file%\.*}.picasaweb.$file_ext
-    info "Processing $src_file -> $dst_file"
-    # If it's a JPEG file, try to fetch image caption
-    if [ $file_ext == 'jpg' ]; then
-      img_caption=$(jhead "$src_file" | sed -n 's/Caption       : //p')
-    else
-      unset img_caption
+#-----------------------------------------------------------------------------------------------------------------------
+# Initialization
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Create a temp output dir if needed
+unset temp_dir
+[ $b_delete -eq 0 ] || temp_dir=$(mktemp -d)
+
+# Get TTY width
+tty_width=$(stty size | cut -d ' ' -f 2)
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Read the file list
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Temporarily change the field separator make find results work with filenames containing spaces
+OLDIFS=$IFS
+IFS=$'\n'
+
+# Get the files
+files=( $(find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.picasaweb.*' -print | sort) )
+
+# Restore the field separator
+IFS=$OLDIFS
+
+i_count=${#files[@]}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Process the picture files
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Iterate through the file list
+i_cur_num=0
+i_err_count=0
+for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
+  src_file=${files[$((i_cur_num-1))]}
+  b_error=0
+  # Determine output dir
+  if [ ! -z "$temp_dir" ]; then
+    output_dir="$temp_dir"
+  else
+    output_dir=$(dirname "$src_file")
+  fi
+  # Determine full output file name
+  src_file_name=$(basename "$src_file")
+  dst_file="$output_dir/${src_file_name%\.*}.picasaweb.$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')"
+  # Print out status message
+  progress $i_cur_num $i_count "Processing $src_file"
+  # Try to fetch image caption (dataset 2, property 105, see http://www.imagemagick.org/script/escape.php for details)
+  if ! img_caption=$(identify -format "%[IPTC:2:105]" "$src_file"); then
+    b_error=1
+    warn "Reading metadata in $src_file failed."
+  # Resize and autorotate the image, add a border if needed
+  elif ! convert $convert_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
+    b_error=1
+    warn "Conversion of $src_file failed."
+  # Apply watermark      
+  elif ! ( [ $b_watermark -eq 0 ] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" ); then
+    b_error=1
+    warn "Watermarking $src_file failed."
+  # Upload the picture
+  elif [ $b_upload -ne 0 ]; then
+    progress $i_cur_num $i_count "Uploading $dst_file";
+    if ! google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" --summary "$img_caption" --quiet; then
+      b_error=1
+      warn "Uploading $dst_file failed."
     fi
-    # Resize and autorotate the image, add a border if needed
-    convert $convert_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file" &&
-      # Apply watermark      
-      ( [ $b_watermark -eq 0 ] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" ) &&
-      # Upload the picture
-      ( [ $b_upload -eq 0 ] || google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" --summary "$img_caption") &&
-      # Remove the handled picture
-      ( [ $b_delete -eq 0 ] || rm -f "$dst_file" )
-  done
+  fi
+  # If processing failed, add the picture to the failure list
+  if [ $b_error -ne 0 ]; then
+    failed_pics[$i_err_count]="$src_file"
+    ((i_err_count++))
+  fi
+  # Remove the failed/handled picture if needed
+  ( [ $b_error -eq 0 ] && [ $b_delete -eq 0 ] ) || [ ! -f "$dst_file" ] || rm -f "$dst_file"  
+done
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Finalization
+#-----------------------------------------------------------------------------------------------------------------------
+
+status "Done. $i_count files processed."
+echo
+
+# Remove temp dir if needed
+[ -z "$temp_dir" ] || rmdir --ignore-fail-on-non-empty "$temp_dir"
+
+# Print out failure list if there's any
+if [ $i_err_count -gt 0 ]; then
+  warn "Processing of the following $i_err_count picture(s) failed:"
+  for f in ${failed_pics[@]}; do echo "$f" >&2; done
+  exit 1
+fi
+
+exit 0
 
