@@ -141,15 +141,24 @@ picasa_album_name="$2"
 [ $b_resize -ne 0 ] && convert_flags="-resize $pic_size"
 
 find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.picasaweb.*' -print |
+  sort |
   while read src_file; do
-    dst_file=${src_file%\.*}.picasaweb.$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')
-    info "Processing $src_file -> $dst_file" &&
-      # Resize and autorotate the image, add a border if needed
-      convert $convert_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file" &&
+    file_ext=$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')
+    dst_file=${src_file%\.*}.picasaweb.$file_ext
+    info "Processing $src_file -> $dst_file"
+    # If it's a JPEG file, try to fetch image caption
+    if [ $file_ext == 'jpg' ]; then
+      img_caption=$(jhead "$src_file" | sed -n 's/Caption       : //p')
+    else
+      unset img_caption
+    fi
+    # Resize and autorotate the image, add a border if needed
+    convert $convert_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file" &&
       # Apply watermark      
       ( [ $b_watermark -eq 0 ] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" ) &&
       # Upload the picture
-      ( [ $b_upload -eq 0 ] || google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" ) &&
+      ( [ $b_upload -eq 0 ] || google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" --summary "$img_caption") &&
       # Remove the handled picture
       ( [ $b_delete -eq 0 ] || rm -f "$dst_file" )
   done
+
