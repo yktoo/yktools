@@ -1,0 +1,79 @@
+#!/bin/bash
+#=======================================================================================================================
+# Description
+#   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity
+# Synopsis
+#   y-generate-wallpaper-xml <xml_file>
+# Author
+#   Dmitry Kann, http://yktoo.com/
+# License
+#   Public domain
+#=======================================================================================================================
+
+# Setup vars
+dir_wallpapers="$HOME/Pictures/Wallpapers/iMac"  # Path to wallpaper directory
+file_output_xml="$1"
+duration_static=1795
+duration_transition=5
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Displays usage info and exits
+# Parameters:
+#   none
+usage() {
+  echo "Usage: $0 <xml_file>"
+  exit 1      
+}
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Main routine
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Check the parameters
+[ ! -z "$file_output_xml" ] || usage
+
+# Write XML file header
+cat << EOF >$file_output_xml
+<background>
+  <starttime>
+    <year>2000</year>
+    <month>01</month>
+    <day>01</day>
+    <hour>00</hour>
+    <minute>00</minute>
+    <second>00</second>
+  </starttime>
+EOF
+
+# Iterate through image files
+unset last_img_file
+find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) -print |
+  while read img_file; do
+    # Insert transition statement if it's not the first image
+    if [ ! -z "$last_img_file" ]; then
+      cat << EOF >>$file_output_xml
+  <transition>
+    <duration>$duration_transition</duration>
+    <from>$last_img_file</from>
+    <to>$img_file</to>
+  </transition>
+EOF
+    fi
+    # Insert 'static' image statement
+      cat << EOF >>$file_output_xml
+  <static>
+    <duration>$duration_static</duration>
+    <file>$img_file</file>
+  </static>
+EOF
+    last_img_file="$img_file"
+  done
+
+# Write XML file footer
+echo '</background>' >>$file_output_xml
+
