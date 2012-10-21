@@ -3,7 +3,7 @@
 # Description
 #   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity
 # Synopsis
-#   y-generate-wallpaper-xml <xml_file>
+#   y-generate-wallpaper-xml [options] <xml_file>
 # Author
 #   Dmitry Kann, http://yktoo.com/
 # License
@@ -12,9 +12,9 @@
 
 # Setup vars
 dir_wallpapers="$HOME/Pictures/Wallpapers/iMac"  # Path to wallpaper directory
-file_output_xml="$1"
 duration_static=1795
 duration_transition=5
+b_set_wallpaper=0
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -25,7 +25,11 @@ duration_transition=5
 # Parameters:
 #   none
 usage() {
-  echo "Usage: $0 <xml_file>"
+  cat << EOF >&2
+Usage: $0 [options] <xml_file>
+Options:
+  -s  Set the freshly generated XML file as current wallpaper
+EOF
   exit 1      
 }
 
@@ -34,12 +38,30 @@ usage() {
 # Main routine
 #-----------------------------------------------------------------------------------------------------------------------
 
+# Parse the command line
+while getopts "s" opt; do
+  case $opt in
+    s)
+      b_set_wallpaper=1
+      shift
+      ;;
+    \?)
+      usage
+      ;;
+  esac
+done
+
 # Check the parameters
+file_output_xml="$1"
 [ ! -z "$file_output_xml" ] || usage
 
+# Canonicalize output file name (make it absolute)
+file_output_xml=$(readlink -f $file_output_xml)
+
 # Write XML file header
-cat << EOF >$file_output_xml
+cat << EOF >"$file_output_xml"
 <background>
+  <!-- Wallpaper definition file. Generated on $(date) by $0 -->
   <starttime>
     <year>2000</year>
     <month>01</month>
@@ -56,7 +78,7 @@ find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*
   while read img_file; do
     # Insert transition statement if it's not the first image
     if [ ! -z "$last_img_file" ]; then
-      cat << EOF >>$file_output_xml
+      cat << EOF >>"$file_output_xml"
   <transition>
     <duration>$duration_transition</duration>
     <from>$last_img_file</from>
@@ -65,7 +87,7 @@ find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*
 EOF
     fi
     # Insert 'static' image statement
-      cat << EOF >>$file_output_xml
+      cat << EOF >>"$file_output_xml"
   <static>
     <duration>$duration_static</duration>
     <file>$img_file</file>
@@ -75,5 +97,8 @@ EOF
   done
 
 # Write XML file footer
-echo '</background>' >>$file_output_xml
+echo '</background>' >>"$file_output_xml"
+
+# Set wallpaper file as current, if needed
+[ $b_set_wallpaper -ne 0 ] && gsettings set org.gnome.desktop.background picture-uri "file://$file_output_xml" 
 
