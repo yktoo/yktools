@@ -3,7 +3,7 @@
 # Description
 #   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity
 # Synopsis
-#   y-generate-wallpaper-xml [options] <xml_file>
+#   y-generate-wallpaper-xml [options] <pictures_dir> <xml_file>
 # Author
 #   Dmitry Kann, http://yktoo.com/
 # License
@@ -11,10 +11,8 @@
 #=======================================================================================================================
 
 # Setup vars
-dir_wallpapers="$HOME/Pictures/Wallpapers/iMac"  # Path to wallpaper directory
 duration_static=1795
 duration_transition=5
-b_set_wallpaper=0
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -26,36 +24,81 @@ b_set_wallpaper=0
 #   none
 usage() {
   cat << EOF >&2
-Usage: $0 [options] <xml_file>
+Usage: $0 [options] pictures_dir xml_file
+
 Options:
-  -s  Set the freshly generated XML file as current wallpaper
+  -s <mode>   Sort the files according to <mode>, whose values are:
+     name     Sort by file path and name
+     shuffle  Randomize file order
+  -v          Verbose output
+  -w          Set the freshly generated XML file as current wallpaper
+
+pictures_dir  Path to directory with pictures
+
+xml_file      Path to the output XML file
 EOF
   exit 1      
 }
 
+# Logs a failure message and exits
+# Parameters:
+#   1 - message
+err() {
+  echo "ERROR: $1" >&2
+  exit 2
+}
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Main routine
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Parse the command line
-while getopts "s" opt; do
-  case $opt in
-    s)
-      b_set_wallpaper=1
-      shift
+b_set_wallpaper=0
+b_verbose=0
+sort_command='cat'
+
+args=$(getopt -o s:vw -- "$@")
+[ $? -eq 0 ] || usage
+eval set -- $args
+for i; do
+  case "$i" in
+    -s)
+      case $2 in
+        name)
+          sort_command="sort"
+          ;;
+        shuffle)
+          sort_command="shuf"
+          ;;
+        *)
+          echo "Invalid sort mode: $2"
+          usage
+          ;;
+      esac
       ;;
-    \?)
-      usage
+    -v)
+      b_verbose=1
+      ;;
+    -w)
+      b_set_wallpaper=1
+      ;;
+    --)
+      shift
+      break
       ;;
   esac
+  shift
 done
 
 # Check the parameters
-file_output_xml="$1"
+dir_wallpapers="$1"
+file_output_xml="$2"
+[ ! -z "$dir_wallpapers"  ] || usage
+[ -d "$dir_wallpapers"    ] || err "Directory $dir_wallpapers does not exist"
 [ ! -z "$file_output_xml" ] || usage
 
-# Canonicalize output file name (make it absolute)
+# Canonicalize directory and output file name (make it absolute)
+dir_wallpapers=$(readlink -f $dir_wallpapers)
 file_output_xml=$(readlink -f $file_output_xml)
 
 # Write XML file header
@@ -74,31 +117,42 @@ EOF
 
 # Iterate through image files
 unset last_img_file
-find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) -print |
-  while read img_file; do
-    # Insert transition statement if it's not the first image
-    if [ ! -z "$last_img_file" ]; then
-      cat << EOF >>"$file_output_xml"
-  <transition>
-    <duration>$duration_transition</duration>
-    <from>$last_img_file</from>
-    <to>$img_file</to>
-  </transition>
+i_count=0
+while read img_file; do
+  # Insert transition statement if it's not the first image
+  if [ ! -z "$last_img_file" ]; then
+    cat << EOF >>"$file_output_xml"
+<transition>
+  <duration>$duration_transition</duration>
+  <from>$last_img_file</from>
+  <to>$img_file</to>
+</transition>
 EOF
-    fi
-    # Insert 'static' image statement
-      cat << EOF >>"$file_output_xml"
-  <static>
-    <duration>$duration_static</duration>
-    <file>$img_file</file>
-  </static>
+  fi
+  # Insert 'static' image statement
+    cat << EOF >>"$file_output_xml"
+<static>
+  <duration>$duration_static</duration>
+  <file>$img_file</file>
+</static>
 EOF
-    last_img_file="$img_file"
-  done
+  last_img_file="$img_file"
+  ((i_count++))  
+# Trick below to avoid piping that would limit the scope $i_count to the subshell
+done << EOF
+$(find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) -print | $sort_command)
+EOF
+
+# Verbose output
+[ $b_verbose -ne 0 ] && echo "File $file_output_xml generated; $i_count wallpaper files found"
 
 # Write XML file footer
 echo '</background>' >>"$file_output_xml"
 
 # Set wallpaper file as current, if needed
-[ $b_set_wallpaper -ne 0 ] && gsettings set org.gnome.desktop.background picture-uri "file://$file_output_xml" 
+[ $b_set_wallpaper -ne 0 ] && (
+  gsettings set org.gnome.desktop.background picture-uri "file://$file_output_xml" &&
+  # Verbose output
+  ( [ $b_verbose -ne 0 ] && echo "Wallpaper URI set to file://$file_output_xml" )
+)
 
