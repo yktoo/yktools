@@ -6,7 +6,7 @@
 #   ImageMagick
 #   googlecl (http://code.google.com/p/googlecl/)
 # Synopsis
-#   y-picasa-upload [options] picture_dir album_name
+#   picasa-upload [options] picture_dir album_name
 #     options     - any combination of B, D, R, U, W, b, s
 #     picture_dir - directory with photos. Mandatory
 #     album_name  - name of the destination Picasa album
