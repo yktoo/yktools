@@ -1,7 +1,8 @@
 #!/bin/bash
 #=======================================================================================================================
 # Description
-#   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity
+#   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity. See
+#   http://blog.yktoo.com/2012/11/ubuntu-xml-wallpaper-creation.html for details.
 # Synopsis
 #   y-generate-wallpaper-xml [options] <pictures_dir> <xml_file>
 # Author
