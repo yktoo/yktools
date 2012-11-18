@@ -1,0 +1,179 @@
+#!/bin/bash
+#=======================================================================================================================
+# Description
+#   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity
+# Synopsis
+#   y-generate-wallpaper-xml [options] <pictures_dir> <xml_file>
+# Author
+#   Dmitry Kann, http://yktoo.com/
+# License
+#   Public domain
+#=======================================================================================================================
+
+# Setup vars
+def_duration_static=1795
+def_duration_transition=5
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Displays usage info and exits
+# Parameters:
+#   1 - optional error message
+usage() {
+  [ ! -z "$1" ] && echo "ERROR: $1" >&2
+  cat << EOF >&2
+XML wallpaper list generation script. Written by Dmitry Kann, http://yktoo.com/
+
+Usage: $0 [options] pictures_dir xml_file
+
+Options:
+  -d <number> Override default display duration ($def_duration_static seconds)
+  -s <mode>   Sort the files according to <mode>, whose values are:
+     name     Sort by file path and name
+     shuffle  Randomize file order
+  -t <number> Override default transition duration ($def_duration_transition
+              seconds). If 0, no transition is used
+  -v          Verbose output
+  -w          Set the generated XML file as current wallpaper
+
+pictures_dir  Path to directory with pictures
+
+xml_file      Path to the output XML file
+EOF
+  exit 1      
+}
+
+# Logs a failure message and exits
+# Parameters:
+#   1 - message
+err() {
+  echo "ERROR: $1" >&2
+  exit 2
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Main routine
+#-----------------------------------------------------------------------------------------------------------------------
+
+# Parse the command line
+typeset -i duration_static=$def_duration_static
+typeset -i duration_transition=$def_duration_transition
+b_set_wallpaper=0
+b_verbose=0
+sort_command='cat'
+
+args=$(getopt -o d:s:t:vw -- "$@")
+[ $? -eq 0 ] || usage
+eval set -- $args
+for i; do
+  case "$i" in
+    -d)
+      duration_static=$2
+      [ "$duration_static" -le 0 ] && usage "Display duration should be greater than zero"
+      ;;
+    -s)
+      case $2 in
+        name)
+          sort_command="sort"
+          ;;
+        shuffle)
+          sort_command="shuf"
+          ;;
+        *)
+          usage "Invalid sort mode: $2"
+          ;;
+      esac
+      ;;
+    -t)
+      [ -z "$2" ] && usage "Transition duration not specified"
+      duration_transition=$2
+      ;;
+    -v)
+      b_verbose=1
+      ;;
+    -w)
+      b_set_wallpaper=1
+      ;;
+    --)
+      shift
+      break
+      ;;
+  esac
+  shift
+done
+
+# Check the parameters
+dir_wallpapers="$1"
+file_output_xml="$2"
+[ ! -z "$dir_wallpapers"  ] || usage
+[ -d "$dir_wallpapers"    ] || err "Directory $dir_wallpapers does not exist"
+[ ! -z "$file_output_xml" ] || usage
+
+# Verbose output
+[ $b_verbose -ne 0 ] && (
+  echo "Display duration: $duration_static sec"
+  echo "Transition duration: $duration_transition sec"
+)
+
+# Canonicalize directory and output file name (make it absolute)
+dir_wallpapers=$(readlink -f $dir_wallpapers)
+file_output_xml=$(readlink -f $file_output_xml)
+
+# Write XML file header
+cat << EOF >"$file_output_xml"
+<background>
+  <!-- Wallpaper definition file. Generated on $(date) by $0 -->
+  <starttime>
+    <year>2000</year>
+    <month>01</month>
+    <day>01</day>
+    <hour>00</hour>
+    <minute>00</minute>
+    <second>00</second>
+  </starttime>
+EOF
+
+# Iterate through image files
+unset last_img_file
+i_count=0
+while read img_file; do
+  # Insert transition statement if it's not the first image
+  if [[ ! -z "$last_img_file" && "$duration_transition" -gt 0 ]]; then
+    cat << EOF >>"$file_output_xml"
+<transition>
+  <duration>$duration_transition</duration>
+  <from>$last_img_file</from>
+  <to>$img_file</to>
+</transition>
+EOF
+  fi
+  # Insert 'static' image statement
+    cat << EOF >>"$file_output_xml"
+<static>
+  <duration>$duration_static</duration>
+  <file>$img_file</file>
+</static>
+EOF
+  last_img_file="$img_file"
+  ((i_count++))  
+# Trick below to avoid piping that would limit the scope $i_count to the subshell
+done << EOF
+$(find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) -print | $sort_command)
+EOF
+
+# Verbose output
+[ $b_verbose -ne 0 ] && echo "File $file_output_xml generated; $i_count wallpaper files found"
+
+# Write XML file footer
+echo '</background>' >>"$file_output_xml"
+
+# Set wallpaper file as current, if needed
+[ $b_set_wallpaper -ne 0 ] && (
+  gsettings set org.gnome.desktop.background picture-uri "file://$file_output_xml" &&
+  # Verbose output
+  ( [ $b_verbose -ne 0 ] && echo "Wallpaper URI set to file://$file_output_xml" )
+)
+

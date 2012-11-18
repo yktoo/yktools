@@ -1,0 +1,26 @@
+#!/bin/bash
+#=======================================================================================================================
+# Description
+#   Script to set a random wallpaper in Gnome 3/Unity
+# Synopsis
+#   y-rotate-wallpaper
+# Author
+#   Dmitry Kann, http://yktoo.com/
+# License
+#   Public domain
+#=======================================================================================================================
+
+# Setup vars
+dir_wallpapers="$HOME/Pictures/Wallpapers/iMac"  # Path to wallpaper directory
+
+# Fill array with picture files (replace spaces with colons to fool the array)
+files=( $(find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) | sed s/' '/':'/g) )
+# Get number of members in the array
+N=${#files[@]}
+# Randomize N
+((N=RANDOM%N))
+# Get the normal file name (change colons back to spaces)
+file=${files[$N]//:/ }
+# Change desktop wallpaper
+gsettings set org.gnome.desktop.background picture-uri "file://$file"
+
