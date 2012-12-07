@@ -77,6 +77,16 @@ EOF
   exit 2
 }
 
+# Fetches image details using its metadata. Return success/error code
+# Parameters:
+#   1 - image file name
+fetch_image_details() {
+  # Fetch image size
+  img_size=$(identify -format "%w %h" "$1" | awk '{print ($1>$2 ? $1 : $2)}') || warn "Determining image size in $1 failed."
+  # Fetch image caption (dataset 2, property 105, see http://www.imagemagick.org/script/escape.php for details)
+  img_caption=$(identify -format "%[IPTC:2:105]" "$1") || warn "Determining image caption in $1 failed."
+}
+
 #=======================================================================================================================
 # Main routine
 #=======================================================================================================================
@@ -130,7 +140,7 @@ for i; do
     --)
       shift;
       break
-      ;;    
+      ;;
   esac
 done
 
@@ -144,8 +154,6 @@ picasa_album_name="$2"
 
 # Check album_name
 [ $b_upload -eq 0 ] || [ ! -z "$picasa_album_name" ] || usage "Album name is not specified"
-
-[ $b_resize -ne 0 ] && convert_flags="-resize $pic_size"
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Initialization
@@ -184,26 +192,34 @@ i_err_count=0
 for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
   src_file=${files[$((i_cur_num-1))]}
   b_error=0
+
   # Determine output dir
   if [ ! -z "$temp_dir" ]; then
     output_dir="$temp_dir"
   else
     output_dir=$(dirname "$src_file")
   fi
+
   # Determine full output file name
   src_file_name=$(basename "$src_file")
   dst_file="$output_dir/${src_file_name%\.*}.picasaweb.$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')"
+
   # Print out status message
   progress $i_cur_num $i_count "Processing $src_file"
-  # Try to fetch image caption (dataset 2, property 105, see http://www.imagemagick.org/script/escape.php for details)
-  if ! img_caption=$(identify -format "%[IPTC:2:105]" "$src_file"); then
-    b_error=1
-    warn "Reading metadata in $src_file failed."
+
+  # Try to fetch image details
+  fetch_image_details "$src_file"
+
+  # Determine the need for resize. We resize unless it's turned off, and only if picture size is unknown or bigger than
+  # the standard size
+  unset s_resize_flags
+  [ $b_resize -ne 0 ] && ( [ -z "$img_size" ] || [ $img_size -gt $pic_size ] ) && s_resize_flags="-resize $pic_size"
+
   # Resize and autorotate the image, add a border if needed
-  elif ! convert $convert_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
+  if ! convert $s_resize_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
     b_error=1
     warn "Conversion of $src_file failed."
-  # Apply watermark      
+  # Apply watermark
   elif ! ( [ $b_watermark -eq 0 ] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" ); then
     b_error=1
     warn "Watermarking $src_file failed."
@@ -221,7 +237,7 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     ((i_err_count++))
   fi
   # Remove the failed/handled picture if needed
-  ( [ $b_error -eq 0 ] && [ $b_delete -eq 0 ] ) || [ ! -f "$dst_file" ] || rm -f "$dst_file"  
+  ( [ $b_error -eq 0 ] && [ $b_delete -eq 0 ] ) || [ ! -f "$dst_file" ] || rm -f "$dst_file"
 done
 
 #-----------------------------------------------------------------------------------------------------------------------
