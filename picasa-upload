@@ -7,7 +7,7 @@
 #   googlecl (http://code.google.com/p/googlecl/)
 # Synopsis
 #   picasa-upload [options] picture_dir album_name
-#     options     - any combination of B, D, R, U, W, b, s
+#     options     - any combination of B, D, R, U, W, b, d, s
 #     picture_dir - directory with photos. Mandatory
 #     album_name  - name of the destination Picasa album
 #=======================================================================================================================
@@ -65,12 +65,13 @@ usage() {
 Usage: $0 [options] photos_dir album_name
 Options:
   -B  Do not add a black border to the image
-  -D  Do not delete the photos after uploading (leave them in the source dir)
+  -D  Do not delete the processed photos after uploading (leave them in the source dir)
   -R  Do not resize photos to $pic_size pixels
   -U  Do not upload the photos to Picasa (implies -D)
   -W  Do not watermark images
   -b  Use black watermark instead of the default white one
-  -s  Use "small" watermark instead of the default one (more appropriate for smaller images)
+  -d  Delete original (after successful processing)
+  -s  Use "small" watermark instead of the default one (better for small images)
 
 album_name is mandatory unless -U is specified.
 EOF
@@ -96,14 +97,15 @@ fetch_image_details() {
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Parse command line options
-b_delete=1
+b_delete_processed=1
+b_delete_original=0
 b_resize=1
 b_watermark=1
 b_upload=1
 s_watermark_to_use="$file_watermark_white"
 s_border_options="-bordercolor black -border 2"
 
-args=$(getopt -o BDRUWbs -- "$@")
+args=$(getopt -o BDRUWbds -- "$@")
 [ $? -ne 0 ] && usage
 eval set -- $args
 for i; do
@@ -113,7 +115,7 @@ for i; do
       shift
       ;;
     -D)
-      b_delete=0
+      b_delete_processed=0
       shift
       ;;
     -R)
@@ -121,7 +123,7 @@ for i; do
       shift
       ;;
     -U)
-      b_delete=0
+      b_delete_processed=0
       b_upload=0
       shift
       ;;
@@ -131,6 +133,10 @@ for i; do
       ;;
     -b)
       s_watermark_to_use="$file_watermark_black"
+      shift
+      ;;
+    -d)
+      b_delete_original=1
       shift
       ;;
     -s)
@@ -161,7 +167,7 @@ picasa_album_name="$2"
 
 # Create a temp output dir if needed
 unset temp_dir
-[ $b_delete -eq 0 ] || temp_dir=$(mktemp -d)
+[ $b_delete_processed -eq 0 ] || temp_dir=$(mktemp -d)
 
 # Get TTY width
 tty_width=$(stty size | cut -d ' ' -f 2)
@@ -170,7 +176,7 @@ tty_width=$(stty size | cut -d ' ' -f 2)
 # Read the file list
 #-----------------------------------------------------------------------------------------------------------------------
 
-# Temporarily change the field separator make find results work with filenames containing spaces
+# Temporarily change the field separator to make find results work with filenames containing spaces
 OLDIFS=$IFS
 IFS=$'\n'
 
@@ -236,8 +242,10 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     failed_pics[$i_err_count]="$src_file"
     ((i_err_count++))
   fi
+  # If successfully processed, delete the original if needed
+  [ $b_error -eq 0 ] && [ $b_delete_original -ne 0 ] && ( rm -f "$src_file" || warn "Couldn't delete $src_file" )
   # Remove the failed/handled picture if needed
-  ( [ $b_error -eq 0 ] && [ $b_delete -eq 0 ] ) || [ ! -f "$dst_file" ] || rm -f "$dst_file"
+  ( [ $b_error -eq 0 ] && [ $b_delete_processed -eq 0 ] ) || [ ! -f "$dst_file" ] || rm -f "$dst_file"
 done
 
 #-----------------------------------------------------------------------------------------------------------------------
