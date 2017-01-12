@@ -1,0 +1,15 @@
+#!/bin/bash
+# Script to toggle the touchpad on/off
+
+DEV_NAME="$(xinput list --name-only | grep -i touchpad)"
+DEV_ID=$(xinput list --id-only "$DEV_NAME")
+DEV_ENABLED=$(xinput list-props $DEV_ID | grep "Device Enabled" | cut -d$'\t' -f3 | tr -d '\n')
+
+# Toggle the device state
+if ((DEV_ENABLED == 0)); then
+    xinput enable $DEV_ID
+    notify-send -i "gtk-yes" "Touchpad" "Touchpad is enabled"
+else
+    xinput disable $DEV_ID
+    notify-send -i "gtk-no" "Touchpad" "Touchpad is disabled"
+fi
