@@ -2,11 +2,12 @@
 # Script to toggle the touchpad on/off
 
 # Try to find a touchpad
-DEV_NAME="$(xinput list --name-only | grep -i touchpad)"
+DEV_NAME="$(xinput list --name-only | grep -i touchpad | head -n 1)"
 [[ -z "$DEV_NAME" ]] && echo "No touchpad found among the input devices" && exit 1
 
 # Get device ID
 DEV_ID=$(xinput list --id-only "$DEV_NAME")
+echo "Device '$DEV_NAME', id=$DEV_ID"
 
 # Get device state
 DEV_ENABLED=$(xinput list-props $DEV_ID | grep "Device Enabled" | cut -d$'\t' -f3 | tr -d '\n')
