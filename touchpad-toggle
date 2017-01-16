@@ -7,6 +7,7 @@ DEV_NAME="$(xinput list --name-only | grep -i touchpad | head -n 1)"
 
 # Get device ID
 DEV_ID=$(xinput list --id-only "$DEV_NAME")
+[[ -z "$DEV_ID" ]] && echo "Failed to get device ID" && exit 1
 echo "Device '$DEV_NAME', id=$DEV_ID"
 
 # Get device state
