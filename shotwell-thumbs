@@ -162,3 +162,4 @@ sqlite3 "$DB_FILE" "select id||' '||filename from PhotoTable order by timestamp 
 
 echo
 status "Done. $count_total thumbnails processed, $count_done thumbnails generated"
+echo
