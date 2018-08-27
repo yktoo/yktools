@@ -83,9 +83,9 @@ EOF
 #   1 - image file name
 fetch_image_details() {
   # Fetch image size
-  img_size=$(identify -format "%w %h" "$1" | awk '{print ($1>$2 ? $1 : $2)}') || warn "Determining image size in $1 failed."
+  img_size=$(identify -quiet -format "%w %h" "$1" | awk '{print ($1>$2 ? $1 : $2)}') || warn "Determining image size in $1 failed."
   # Fetch image caption (dataset 2, property 105, see http://www.imagemagick.org/script/escape.php for details)
-  img_caption=$(identify -format "%[IPTC:2:105]" "$1") || warn "Determining image caption in $1 failed."
+  img_caption=$(identify -quiet -format "%[IPTC:2:105]" "$1") || warn "Determining image caption in $1 failed."
 }
 
 #=======================================================================================================================
@@ -222,7 +222,7 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
   [ $b_resize -ne 0 ] && ( [ -z "$img_size" ] || [ $img_size -gt $pic_size ] ) && s_resize_flags="-resize $pic_size"
 
   # Resize and autorotate the image, add a border if needed
-  if ! convert $s_resize_flags -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
+  if ! convert $s_resize_flags -quiet -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
     b_error=1
     warn "Conversion of $src_file failed."
   # Apply watermark
