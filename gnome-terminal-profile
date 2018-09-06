@@ -3,21 +3,15 @@
 # Export and import Gnome Terminal profiles
 #=======================================================================================================================
 
+. "$(dirname "$(realpath "$0")")/common.sh"
+
 # Displays usage info and exits
-# Parameters:
-#   1 - error message (if any)
+# Arguments:
+#   $1 error message (if any)
 usage() {
   [ -z "$1" ] || echo "ERROR: $1" >&2
   echo "Usage: $0 import|export <filename>" >&2
   exit 1
-}
-
-# Prints a failure message and exits
-# Parameters:
-#   1 - message
-err() {
-  echo "ERROR: $1" >&2
-  exit 2
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -36,14 +30,14 @@ case "$mode" in
     # Export profile
     export)
         dconf dump "/org/gnome/terminal/legacy/profiles:/:$profile/" > "$filename"
-        echo "Saved the default profile $profile in $filename"
+        log "Saved the default profile $profile in $filename"
         ;;
 
     # Import profile
     import)
         [[ ! -r "$filename" ]] && err "Failed to read from file $filename"
         dconf load "/org/gnome/terminal/legacy/profiles:/:$profile/" < "$filename"
-        echo "Loaded $filename into the default profile $profile"
+        log "Loaded $filename into the default profile $profile"
         ;;
 
     *)
