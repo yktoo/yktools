@@ -5,16 +5,7 @@
 
 . "$(dirname "$(realpath "$0")")/common.sh"
 
-# Displays usage info and exits
-# Arguments:
-#   $1 error message (if any)
-usage() {
-  [ -z "$1" ] || echo "ERROR: $1" >&2
-  echo "Usage: $0 import|export <filename>" >&2
-  exit 1
-}
-
-#-----------------------------------------------------------------------------------------------------------------------
+USAGE_INFO="Usage: $0 import|export <filename>"
 
 # Check variables
 mode="$1"
@@ -30,14 +21,14 @@ case "$mode" in
     # Export profile
     export)
         dconf dump "/org/gnome/terminal/legacy/profiles:/:$profile/" > "$filename"
-        log "Saved the default profile $profile in $filename"
+        log "Saved the default profile ${CLR_VAR}${profile}${CLR_OFF} in ${CLR_VAR}${filename}${CLR_OFF}"
         ;;
 
     # Import profile
     import)
         [[ ! -r "$filename" ]] && err "Failed to read from file $filename"
         dconf load "/org/gnome/terminal/legacy/profiles:/:$profile/" < "$filename"
-        log "Loaded $filename into the default profile $profile"
+        log "Loaded ${CLR_VAR}${filename}${CLR_OFF} into the default profile ${CLR_VAR}${profile}${CLR_OFF}"
         ;;
 
     *)

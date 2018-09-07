@@ -11,22 +11,13 @@
 #   Public domain
 #=======================================================================================================================
 
+. "$(dirname "$(realpath "$0")")/common.sh"
+
 # Setup vars
 def_duration_static=1795
 def_duration_transition=5
 
-#-----------------------------------------------------------------------------------------------------------------------
-# Functions
-#-----------------------------------------------------------------------------------------------------------------------
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Displays usage info and exits
-# Parameters:
-#   1 - optional error message
-usage() {
-  [ ! -z "$1" ] && echo "ERROR: $1" >&2
-  cat << EOF >&2
-XML wallpaper list generation script. Written by Dmitry Kann, http://yktoo.com/
+USAGE_INFO="XML wallpaper list generation script. Written by Dmitry Kann, http://yktoo.com/
 
 Usage: $0 [options] pictures_dir xml_file
 
@@ -42,21 +33,8 @@ Options:
 
 pictures_dir  Path to directory with pictures
 
-xml_file      Path to the output XML file
-EOF
-  exit 1
-}
+xml_file      Path to the output XML file"
 
-# Logs a failure message and exits
-# Parameters:
-#   1 - message
-err() {
-  echo "ERROR: $1" >&2
-  exit 2
-}
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Main routine
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Parse the command line
@@ -70,112 +48,117 @@ args=$(getopt -o d:s:t:vw -- "$@")
 [ $? -eq 0 ] || usage
 eval set -- $args
 for i; do
-  case "$i" in
-    -d)
-      duration_static=$2
-      [ "$duration_static" -le 0 ] && usage "Display duration should be greater than zero"
-      ;;
-    -s)
-      case $2 in
-        name)
-          sort_command="sort"
-          ;;
-        shuffle)
-          sort_command="shuf"
-          ;;
-        *)
-          usage "Invalid sort mode: $2"
-          ;;
-      esac
-      ;;
-    -t)
-      [ -z "$2" ] && usage "Transition duration not specified"
-      duration_transition=$2
-      ;;
-    -v)
-      b_verbose=1
-      ;;
-    -w)
-      b_set_wallpaper=1
-      ;;
-    --)
-      shift
-      break
-      ;;
-  esac
-  shift
+    case "$i" in
+        -d)
+            duration_static=$2
+            [[ "$duration_static" -le 0 ]] && usage "Display duration should be greater than zero"
+            ;;
+
+        -s)
+            case $2 in
+                name)
+                    sort_command="sort"
+                    ;;
+                shuffle)
+                    sort_command="shuf"
+                    ;;
+                *)
+                    usage "Invalid sort mode: $2"
+                    ;;
+            esac
+            ;;
+
+        -t)
+            [[ -z "$2" ]] && usage "Transition duration not specified"
+            duration_transition=$2
+            ;;
+
+        -v)
+            b_verbose=1
+            ;;
+
+        -w)
+            b_set_wallpaper=1
+            ;;
+
+        --)
+            shift
+            break
+            ;;
+    esac
+    shift
 done
 
 # Check the parameters
 dir_wallpapers="$1"
 file_output_xml="$2"
-[ ! -z "$dir_wallpapers"  ] || usage
-[ -d "$dir_wallpapers"    ] || err "Directory $dir_wallpapers does not exist"
-[ ! -z "$file_output_xml" ] || usage
+[[ -z "$dir_wallpapers"  ]] && usage "No wallpaper directory specified"
+[[ -d "$dir_wallpapers"  ]] || err "Directory $dir_wallpapers does not exist"
+[[ -z "$file_output_xml" ]] && usage "No output XML file specified"
 
 # Verbose output
-[ $b_verbose -ne 0 ] && (
-  echo "Display duration: $duration_static sec"
-  echo "Transition duration: $duration_transition sec"
-)
+if [[ $b_verbose -ne 0 ]]; then
+    log "Display duration: $duration_static sec"
+    log "Transition duration: $duration_transition sec"
+fi
 
 # Canonicalize directory and output file name (make it absolute)
-dir_wallpapers=$(readlink -f $dir_wallpapers)
-file_output_xml=$(readlink -f $file_output_xml)
+dir_wallpapers="$(realpath "$dir_wallpapers")"
+file_output_xml="$(realpath "$file_output_xml")"
 
 # Write XML file header
 cat << EOF >"$file_output_xml"
 <background>
-  <!-- Wallpaper definition file. Generated on $(date) by $0 -->
-  <starttime>
-    <year>2000</year>
-    <month>01</month>
-    <day>01</day>
-    <hour>00</hour>
-    <minute>00</minute>
-    <second>00</second>
-  </starttime>
+    <!-- Wallpaper definition file. Generated on $(date) by $0 -->
+    <starttime>
+        <year>2000</year>
+        <month>01</month>
+        <day>01</day>
+        <hour>00</hour>
+        <minute>00</minute>
+        <second>00</second>
+    </starttime>
 EOF
 
 # Iterate through image files
 unset last_img_file
 i_count=0
 while read img_file; do
-  # Insert transition statement if it's not the first image
-  if [[ ! -z "$last_img_file" && "$duration_transition" -gt 0 ]]; then
-    cat << EOF >>"$file_output_xml"
+    # Insert transition statement if it's not the first image
+    if [[ -n "$last_img_file" && "$duration_transition" -gt 0 ]]; then
+        cat << EOF >>"$file_output_xml"
 <transition>
-  <duration>$duration_transition</duration>
-  <from>$last_img_file</from>
-  <to>$img_file</to>
+    <duration>$duration_transition</duration>
+    <from>$last_img_file</from>
+    <to>$img_file</to>
 </transition>
 EOF
-  fi
-  # Insert 'static' image statement
+    fi
+
+    # Insert 'static' image statement
     cat << EOF >>"$file_output_xml"
 <static>
-  <duration>$duration_static</duration>
-  <file>$img_file</file>
+    <duration>$duration_static</duration>
+    <file>$img_file</file>
 </static>
 EOF
-  last_img_file="$img_file"
-  ((i_count++))
-# Trick below to avoid piping that would limit the scope $i_count to the subshell
+    last_img_file="$img_file"
+    ((i_count++))
+    # Trick below to avoid piping that would limit the scope of $i_count to the subshell
 done << EOF
 $(find "$dir_wallpapers" -type f \( -iname '*.jpeg' -o -iname '*.jpg' -o -iname '*.png' \) -print | $sort_command)
 EOF
 
 # Verbose output
-[ $b_verbose -ne 0 ] && echo "File $file_output_xml generated; $i_count wallpaper files found"
+[[ $b_verbose -ne 0 ]] && log "File $file_output_xml generated; $i_count wallpaper files found"
 
 # Write XML file footer
 echo '</background>' >>"$file_output_xml"
 
 # Set wallpaper file as current, if needed
-[ $b_set_wallpaper -ne 0 ] && (
-  gsettings set org.gnome.desktop.background picture-uri "file://$file_output_xml" &&
-  gsettings set org.gnome.desktop.background picture-options "zoom" &&
-  # Verbose output
-  ( [ $b_verbose -ne 0 ] && echo "Wallpaper URI set to file://$file_output_xml" )
-)
-
+if [[ $b_set_wallpaper -ne 0 ]]; then
+    gsettings set org.gnome.desktop.background picture-uri "file://$file_output_xml" &&
+    gsettings set org.gnome.desktop.background picture-options "zoom" &&
+    # Verbose output
+    ( [[ $b_verbose -ne 0 ]] && log "Wallpaper URI set to file://$file_output_xml" )
+fi

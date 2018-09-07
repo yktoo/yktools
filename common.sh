@@ -74,9 +74,18 @@ err() {
     exit 2
 }
 
+# Displays usage info (taken from the mandatory var USAGE_INFO) and exits
+# Arguments:
+#   $1 optional error message
+usage() {
+  [[ -z "$USAGE_INFO" ]] && echo "FATAL: USAGE_INFO isn't defined" >&2 && exit 9
+  [[ -n "$1" ]] && log "${CLR_ERR}ERROR: $1${CLR_OFF}" "ERROR: $1"
+  echo "$USAGE_INFO" >&2
+  exit 1
+}
+
 # Handles Ctrl-C
 interrupted() {
     warn "Processing interrupted"
     exit 10
 }
-

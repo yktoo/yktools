@@ -10,28 +10,12 @@
 #   Public domain
 #=======================================================================================================================
 
+. "$(dirname "$(realpath "$0")")/common.sh"
+
 # Setup vars
 DB_FILE="$HOME/.local/share/shotwell/data/photo.db"
 THUMB_BASE_DIR="$HOME/.cache/shotwell/thumbs/"
-
-# Get TTY width
-tty_width=$(stty size | cut -d ' ' -f 2)
-
-#-----------------------------------------------------------------------------------------------------------------------
-
-# Handles Ctrl-C
-interrupted() {
-  echo "Processing interrupted" >&2
-  exit 10
-}
-
-# Displays usage info and exits
-# Arguments:
-#   1 - optional error message
-usage() {
-  [[ -n "$1" ]] && echo "ERROR: $1" >&2
-  cat << EOF >&2
-Script for (re)generating Shotwell thumbnails. Written by Dmitry Kann, http://yktoo.com/
+USAGE_INFO="Script for (re)generating Shotwell thumbnails. Written by Dmitry Kann, http://yktoo.com/
 
 Usage: $0 [options]
 
@@ -41,65 +25,56 @@ Options:
   -128  Generate 128x128 thumbnail
   -360  Generate 360x360 thumbnail
 
-If neither -128 nor -360 is given, both sizes are generated.
+If neither -128 nor -360 is given, both sizes are generated."
 
-EOF
-  exit 1
-}
-
-# Logs a failure message and exits
-# Arguments:
-#   1 - message
-err() {
-  echo "ERROR: $1" >&2
-  exit 2
-}
+# Get TTY width
+tty_width=$(stty size | cut -d ' ' -f 2)
 
 # Prints out a status message (overwritten every time)
 # Arguments:
-#   1 - message text
+#   $1 message text
 status() {
-  # Pad/truncate the line to fit screen width
-  printf "%-${tty_width}.${tty_width}s\r" "$1"
+    # Pad/truncate the line to fit screen width
+    printf "%-${tty_width}.${tty_width}s\r" "$1"
 }
 
 # Prints out a progress message
 # Arguments:
-#   1 - current item number
-#   2 - total number of items
-#   3 - message text
+#   $1 current item number
+#   $2 total number of items
+#   $3 message text
 progress() {
-  printf -v msg '[%d/%d] %s' "$1" "$2" "$3"
-  status "$msg"
+    printf -v msg '[%d/%d] %s' "$1" "$2" "$3"
+    status "$msg"
 }
 
 # Generates a thumbnail file
 # Arguments:
-#   1 - thumbnail size, either 128 or 360
-#   2 - photo ID
-#   3 - photo file name
-#   4 - number of current photo
-#   5 - total number of photos
+#   $1 thumbnail size, either 128 or 360
+#   $2 photo ID
+#   $3 photo file name
+#   $4 number of current photo
+#   $5 total number of photos
 # Returns:
 #   Nonzero value if thumbnail generation was skipped
 generate_thumb() {
-  size="$1"
-  id="$2"
-  pic_file="$3"
-  thumb_file=$(printf "$THUMB_BASE_DIR/thumbs${size}/thumb%016x.jpg" "$id")
-  # If force regenerate or thumb file doesn't exist yet
-  if ((regenerate != 0)) || [[ ! -f "$thumb_file" ]]; then
-    progress "$4" "$5" "Generating $size thumbnail for $pic_file"
-    convert "$pic_file" -auto-orient -thumbnail "${size}x${size}" "$thumb_file"
-    if (($? != 0)); then
-      status ""
-      err "Generating thumbnail for $pic_file failed"
+    size="$1"
+    id="$2"
+    pic_file="$3"
+    thumb_file=$(printf "$THUMB_BASE_DIR/thumbs${size}/thumb%016x.jpg" "$id")
+    # If force regenerate or thumb file doesn't exist yet
+    if ((regenerate != 0)) || [[ ! -f "$thumb_file" ]]; then
+        progress "$4" "$5" "Generating $size thumbnail for $pic_file"
+        convert "$pic_file" -auto-orient -thumbnail "${size}x${size}" "$thumb_file"
+        if (($? != 0)); then
+            status ""
+            err "Generating thumbnail for $pic_file failed"
+        fi
+        return 0
+    else
+        progress "$4" "$5" "Skipping $size thumbnail for $pic_file"
+        return 1
     fi
-    return 0
-  else
-    progress "$4" "$5" "Skipping $size thumbnail for $pic_file"
-    return 1
-  fi
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -119,32 +94,32 @@ regenerate=0
 thumb128=
 thumb360=
 for arg; do
-  case "$arg" in
-    -h)
-      usage
-      ;;
+    case "$arg" in
+        -h)
+            usage
+            ;;
 
-    -r)
-      regenerate=1
-      ;;
+        -r)
+            regenerate=1
+            ;;
 
-    -128)
-      thumb128=1
-      ;;
+        -128)
+            thumb128=1
+            ;;
 
-    -360)
-      thumb360=1
-      ;;
+        -360)
+            thumb360=1
+            ;;
 
-    *)
-      usage "Unknown option: '$arg'"
-  esac
+        *)
+            usage "Unknown option: '$arg'"
+    esac
 done
 
 # If no size explicitly specified, activate both of them
 if [[ -z "$thumb128" ]] && [[ -z "$thumb360" ]]; then
-  thumb128=1
-  thumb360=1
+    thumb128=1
+    thumb360=1
 fi
 
 # Get the total number of photos
@@ -155,10 +130,10 @@ count_total=$(sqlite3 "$DB_FILE" "select count(*) from PhotoTable")
 count_cur=0
 count_done=0
 sqlite3 "$DB_FILE" "select id||' '||filename from PhotoTable order by timestamp desc" |
-  while read pic_id pic_file; do
-    ((thumb128 != 0)) && generate_thumb 128 "$pic_id" "$pic_file" "$((++count_cur))" "$count_total" && ((count_done++))
-    ((thumb360 != 0)) && generate_thumb 360 "$pic_id" "$pic_file" "$((++count_cur))" "$count_total" && ((count_done++))
-  done
+    while read pic_id pic_file; do
+        ((thumb128 != 0)) && generate_thumb 128 "$pic_id" "$pic_file" "$((++count_cur))" "$count_total" && ((count_done++))
+        ((thumb360 != 0)) && generate_thumb 360 "$pic_id" "$pic_file" "$((++count_cur))" "$count_total" && ((count_done++))
+    done
 
 echo
 status "Done. $count_total thumbnails processed, $count_done thumbnails generated"
