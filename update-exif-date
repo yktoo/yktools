@@ -3,52 +3,26 @@
 # Description
 #   Script to update EXIF date of JPEG files based on their names. Files must have extension '.jpg' or '.JPG', and
 #   their names must start with date in format 'yyyy-mm-dd'.
-# Parameters
-#   1 - Directory with JPEG files. Mandatory.
+# Arguments
+#   $1 Directory with JPEG files. Mandatory.
 # Prerequisites
 #   Requires jhead
 #=======================================================================================================================
 
+. "$(dirname "$(realpath "$0")")/common.sh"
+
 # Setup vars
 dir_source=$1
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Functions
-#-----------------------------------------------------------------------------------------------------------------------
-
-# Logs a message
-# Parameters:
-#   1 - message
-log() {
-  echo "$1"
-}
-
-# Logs a failure message
-# Parameters:
-#   1 - message
-err() {
-  log "ERROR: $1"
-  exit 1
-}
-
-# Prints out usage info and exits
-usage() {
-  echo "Usage: $0 <jpeg_directory>"
-  exit 1
-}
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Main routine
-#-----------------------------------------------------------------------------------------------------------------------
+USAGE_INFO="Usage: $0 <jpeg_directory>"
 
 # Check the parameters
-[[ -z "$dir_source" ]] && usage
+[[ -z "$dir_source" ]] && usage "No source directory specified"
 [[ -d "$dir_source" ]] || err "Directory $dir_source does not exist."
 
 find "$dir_source" -type f -iname '*.jpg' -print |
-  while read pic_file; do
-    file_name=$(basename "$pic_file")
-    file_date=$(echo ${file_name:0:10} | tr '-' ':')
-    echo "$file_name: setting date to $file_date"
-    jhead -q -ds$file_date -mkexif "$pic_file"
-  done
+    while read pic_file; do
+        file_name=$(basename "$pic_file")
+        file_date=$(echo ${file_name:0:10} | tr '-' ':')
+        log "$file_name: setting date to $file_date"
+        jhead -q -ds$file_date -mkexif "$pic_file"
+    done
