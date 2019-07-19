@@ -1,0 +1,38 @@
+#!/bin/bash
+#=======================================================================================================================
+# Description
+#   Run a git command for all available repositories, starting from $CODE_ROOT_DIR.
+#   NB: it ignores all directories whose name starts with a '_' and everything below them unless you supply '.' as the
+#   first argument (see below).
+# Arguments
+#   $1 - if '.' is passed as first argument, search starts from the current dir instead of $CODE_ROOT_DIR and
+#        directories starting with '_' are not ignored
+#   $@ - Any arguments to be passed to git
+#=======================================================================================================================
+
+. "$(dirname "$(realpath "$0")")/common.sh"
+
+CODE_ROOT_DIR="$HOME/code"
+USAGE_INFO="Usage: $0 <git_command> [arg...]"
+
+if [[ "$1" == '.' ]]; then
+    shift
+    find_cmd="find \"$PWD\" -type d -name .git"
+else
+    # Ignore dirs starting with '_'
+    find_cmd="find \"$CODE_ROOT_DIR\" -type d -name .git ! -path '*/_*'"
+fi
+
+cmd=$1
+shift
+
+[[ -z "$cmd" ]] && usage "No git command specified"
+
+# Iterate through all known repositories
+eval $find_cmd |
+    xargs dirname |
+    while read dir; do
+        log "Running ${CLR_OK}git $cmd${CLR_OFF} in $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
+        (cd "$dir" && git $cmd "$@")
+        log '--------------------------------------------------------------------------------'
+    done
