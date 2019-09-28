@@ -4,7 +4,7 @@
 #   Script for automated upload of photos to picasa
 # Requires
 #   ImageMagick
-#   googlecl (http://code.google.com/p/googlecl/)
+#   gphotos-uploader-cli (https://github.com/gphotosuploader/gphotos-uploader-cli)
 # Synopsis
 #   picasa-upload [options] picture_dir album_name
 #     options     - any combination of B, D, R, U, W, b, d, s
@@ -19,11 +19,11 @@ pic_size=1600                                                      # Max size of
 file_watermark_white="$HOME/Pictures/Misc/dk-watermark-white.png"  # Default watermark file
 file_watermark_black="$HOME/Pictures/Misc/dk-watermark-black.png"  # Black watermark file
 file_watermark_small="$HOME/Pictures/Misc/dk-watermark-small.png"  # 'Small' watermark file
-picasa_owner="dmitry.kann"                                         # Owner of the Picasa account
-USAGE_INFO="Usage: $0 [options] photos_dir album_name
+dir_upload="$HOME/tmp/gphoto-upload"                        # Path that gphotos-uploader-cli is configured to upload from
+USAGE_INFO="Usage: $0 [options] photos_dir
 Options:
   -B  Do not add a black border to the image
-  -D  Do not delete the processed photos after uploading (leave them in the source dir)
+  -D  Do not delete the $dir_upload directory after processing
   -R  Do not resize photos to $pic_size pixels
   -U  Do not upload the photos to Picasa (implies -D)
   -W  Do not watermark images
@@ -31,7 +31,7 @@ Options:
   -d  Delete original (after successful processing)
   -s  Use "small" watermark instead of the default one (better for small images)
 
-album_name is mandatory unless -U is specified."
+gphotos-uploader-cli must be configured to use $dir_upload unless -U is specified."
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -74,7 +74,7 @@ fetch_image_details() {
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Parse command line options
-b_delete_processed=1
+b_delete_upload_dir=1
 b_delete_original=0
 b_resize=1
 b_watermark=1
@@ -92,7 +92,7 @@ for i; do
             shift
             ;;
         -D)
-            b_delete_processed=0
+            b_delete_upload_dir=0
             shift
             ;;
         -R)
@@ -100,7 +100,7 @@ for i; do
             shift
             ;;
         -U)
-            b_delete_processed=0
+            b_delete_upload_dir=0
             b_upload=0
             shift
             ;;
@@ -135,16 +135,12 @@ picasa_album_name="$2"
 [[ -n "$dir_photos" ]] || usage "Directory for photos is not specified"
 [[ -d "$dir_photos" ]] || err "Directory '$dir_photos' does not exist."
 
-# Check album_name
-[[ $b_upload -eq 0 ]] || [[ -n "$picasa_album_name" ]] || usage "Album name is not specified"
-
 #-----------------------------------------------------------------------------------------------------------------------
 # Initialization
 #-----------------------------------------------------------------------------------------------------------------------
 
-# Create a temp output dir if needed
-unset temp_dir
-[[ $b_delete_processed -eq 0 ]] || temp_dir=$(mktemp -d)
+# Make sure target dir created
+mkdir -p "$dir_upload" || err "Failed to create target directory $dir_upload"
 
 # Get TTY width
 tty_width=$(stty size | cut -d ' ' -f 2)
@@ -158,7 +154,7 @@ OLDIFS=$IFS
 IFS=$'\n'
 
 # Get the files
-files=( $(find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.picasaweb.*' -print | sort) )
+files=( $(find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.w.*' -print | sort) )
 
 # Restore the field separator
 IFS=$OLDIFS
@@ -176,16 +172,9 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     src_file=${files[$((i_cur_num-1))]}
     b_error=0
 
-    # Determine output dir
-    if [[ -n "$temp_dir" ]]; then
-        output_dir="$temp_dir"
-    else
-        output_dir=$(dirname "$src_file")
-    fi
-
     # Determine full output file name
     src_file_name=$(basename "$src_file")
-    dst_file="$output_dir/${src_file_name%\.*}.picasaweb.$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')"
+    dst_file="$dir_upload/${src_file_name%\.*}.w.$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')"
 
     # Print out status message
     progress $i_cur_num $i_count "Processing $src_file"
@@ -202,17 +191,12 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     if ! convert $s_resize_flags -quiet -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
         b_error=1
         warn "Conversion of $src_file failed."
-        # Apply watermark
+
+    # Apply watermark
     elif ! ( [[ $b_watermark -eq 0 ]] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" ); then
         b_error=1
         warn "Watermarking $src_file failed."
-        # Upload the picture
-    elif [ $b_upload -ne 0 ]; then
-        progress $i_cur_num $i_count "Uploading $dst_file";
-        if ! google picasa post "$picasa_album_name" "$dst_file" --owner "$picasa_owner" --summary "$img_caption" --quiet; then
-            b_error=1
-            warn "Uploading $dst_file failed."
-        fi
+
     fi
     # If processing failed, add the picture to the failure list
     if [[ $b_error -ne 0 ]]; then
@@ -220,10 +204,26 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
         ((i_err_count++))
     fi
     # If successfully processed, delete the original if needed
-    [[ $b_error -eq 0 ]] && [ $b_delete_original -ne 0 ] && ( rm -f "$src_file" || warn "Couldn't delete $src_file" )
-    # Remove the failed/handled picture if needed
-    ( [[ $b_error -eq 0 ]] && [[ $b_delete_processed -eq 0 ]] ) || [[ ! -f "$dst_file" ]] || rm -f "$dst_file"
+    [[ $b_error -eq 0 ]] && [[ $b_delete_original -ne 0 ]] && ( rm -f "$src_file" || warn "Couldn't delete $src_file" )
+    # Remove picture if it's failed
+    [[ $b_error -eq 0 ]] || rm -f "$dst_file"
 done
+
+#-----------------------------------------------------------------------------------------------------------------------
+if [[ $b_upload -ne 0 ]]; then
+    # If there was no error, upload the processed pictures
+    if [[ $i_err_count -eq 0 ]]; then
+        gphotos-uploader-cli
+        rc=$?
+        [[ $rc -eq 0 ]] || warn "gphotos-uploader-cli exited with code $rc"
+
+    # Print out failure list otherwise
+    else
+        warn "There were errors processing following pictures:"
+        for f in ${failed_pics[@]}; do echo "$f" >&2; done
+        warn "Uploading skipped"
+    fi
+fi
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Finalization
@@ -232,14 +232,9 @@ done
 status "Done. $i_count files processed."
 echo
 
-# Remove temp dir if needed
-[[ -z "$temp_dir" ]] || rmdir --ignore-fail-on-non-empty "$temp_dir"
+# Remove upload dir if needed
+[[ $b_delete_upload_dir -ne 0 ]] && rm -rf "$dir_upload"
 
-# Print out failure list if there's any
-if [[ $i_err_count -gt 0 ]]; then
-    warn "Processing of the following $i_err_count picture(s) failed:"
-    for f in ${failed_pics[@]}; do echo "$f" >&2; done
-    exit 1
-fi
+[[ $i_err_count -gt 0 ]] && exit 1
 
 exit 0
