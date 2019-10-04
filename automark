@@ -1,15 +1,13 @@
 #!/bin/bash
 #=======================================================================================================================
 # Description
-#   Script for automated upload of photos to picasa
+#   Script for automated watermarking and uploading photos to Google Photos
 # Requires
 #   ImageMagick
+#   webp (apt install webp) for WebP support
 #   gphotos-uploader-cli (https://github.com/gphotosuploader/gphotos-uploader-cli)
 # Synopsis
-#   picasa-upload [options] picture_dir album_name
-#     options     - any combination of B, D, R, U, W, b, d, s
-#     picture_dir - directory with photos. Mandatory
-#     album_name  - name of the destination Picasa album
+#   automark [options] picture_dir
 #=======================================================================================================================
 
 . "$(dirname "$(realpath "$0")")/common.sh"
@@ -19,13 +17,14 @@ pic_size=1600                                                      # Max size of
 file_watermark_white="$HOME/Pictures/Misc/dk-watermark-white.png"  # Default watermark file
 file_watermark_black="$HOME/Pictures/Misc/dk-watermark-black.png"  # Black watermark file
 file_watermark_small="$HOME/Pictures/Misc/dk-watermark-small.png"  # 'Small' watermark file
-dir_upload="$HOME/tmp/gphoto-upload"                        # Path that gphotos-uploader-cli is configured to upload from
+dir_upload="$HOME/tmp/gphoto-upload"                               # Path that gphotos-uploader-cli is configured to upload from
 USAGE_INFO="Usage: $0 [options] photos_dir
 Options:
   -B  Do not add a black border to the image
   -D  Do not delete the $dir_upload directory after processing
+  -P  Do not convert to WebP
   -R  Do not resize photos to $pic_size pixels
-  -U  Do not upload the photos to Picasa (implies -D)
+  -U  Do not upload the photos (implies -D)
   -W  Do not watermark images
   -b  Use black watermark instead of the default white one
   -d  Delete original (after successful processing)
@@ -69,6 +68,9 @@ fetch_image_details() {
 # Main routine
 #=======================================================================================================================
 
+# Trap Ctrl-C
+trap interrupted INT
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Parse and check the command line
 #-----------------------------------------------------------------------------------------------------------------------
@@ -76,13 +78,14 @@ fetch_image_details() {
 # Parse command line options
 b_delete_upload_dir=1
 b_delete_original=0
+b_webp=1
 b_resize=1
 b_watermark=1
 b_upload=1
 s_watermark_to_use="$file_watermark_white"
 s_border_options="-bordercolor black -border 2"
 
-args=$(getopt -o BDRUWbds -- "$@")
+args=$(getopt -o BDPRUWbds -- "$@")
 [ $? -ne 0 ] && usage
 eval set -- $args
 for i; do
@@ -93,6 +96,10 @@ for i; do
             ;;
         -D)
             b_delete_upload_dir=0
+            shift
+            ;;
+        -P)
+            b_webp=0
             shift
             ;;
         -R)
@@ -129,7 +136,6 @@ done
 
 # Parse the rest of the command line
 dir_photos="$1"
-picasa_album_name="$2"
 
 # Check photos_dir
 [[ -n "$dir_photos" ]] || usage "Directory for photos is not specified"
@@ -154,7 +160,7 @@ OLDIFS=$IFS
 IFS=$'\n'
 
 # Get the files
-files=( $(find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' \) ! -name '*.w.*' -print | sort) )
+files=( $(find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.webp' \) ! -name '*.w.*' -print | sort) )
 
 # Restore the field separator
 IFS=$OLDIFS
@@ -174,7 +180,16 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
 
     # Determine full output file name
     src_file_name=$(basename "$src_file")
-    dst_file="$dir_upload/${src_file_name%\.*}.w.$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')"
+    src_extension="$(echo ${src_file##*.} | tr '[:upper:]' '[:lower:]')"
+    if [[ $b_webp -eq 0 ]]; then
+        dst_extension="$src_extension"
+    else
+        dst_extension=webp
+    fi
+    dst_file="$dir_upload/${src_file_name%\.*}.w.$dst_extension"
+
+    # Create a temporary PNG file for processing
+    tmp_file="$(mktemp).png"
 
     # Print out status message
     progress $i_cur_num $i_count "Processing $src_file"
@@ -188,25 +203,39 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     [[ $b_resize -ne 0 ]] && ( [[ -z "$img_size" ]] || [[ $img_size -gt $pic_size ]] ) && s_resize_flags="-resize $pic_size"
 
     # Resize and autorotate the image, add a border if needed
-    if ! convert $s_resize_flags -quiet -quality 90 -auto-orient $s_border_options "$src_file" "$dst_file"; then
+    if ! convert $s_resize_flags -quiet -quality 90 -auto-orient $s_border_options "$src_file" "$tmp_file"; then
         b_error=1
         warn "Conversion of $src_file failed."
 
     # Apply watermark
-    elif ! ( [[ $b_watermark -eq 0 ]] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$dst_file" "$dst_file" ); then
+    elif ! ( [[ $b_watermark -eq 0 ]] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$tmp_file" "$tmp_file" ); then
         b_error=1
         warn "Watermarking $src_file failed."
 
+    # If successfully processed
+    else
+        # If the format stays PNG, just move the created file into the final destination
+        if [[ "$dst_extension" == "png" ]]; then
+            mv "$tmp_file" "$dst_file" || (b_error=1 && warn "Failed to move $tmp_file to $dst_file")
+        # Otherwise convert it to the target format
+        else
+            convert "$tmp_file" "$dst_file" || (b_error=1 && warn "Failed to convert $tmp_file into $dst_file")
+        fi
     fi
-    # If processing failed, add the picture to the failure list
-    if [[ $b_error -ne 0 ]]; then
+
+    # If processing succeeded
+    if [[ $b_error -eq 0 ]]; then
+        # Delete the original if needed
+        [[ $b_delete_original -ne 0 ]] && (rm -f "$src_file" || warn "Couldn't delete $src_file")
+
+    # Otherwise add the picture to the failure list
+    else
         failed_pics[$i_err_count]="$src_file"
         ((i_err_count++))
     fi
-    # If successfully processed, delete the original if needed
-    [[ $b_error -eq 0 ]] && [[ $b_delete_original -ne 0 ]] && ( rm -f "$src_file" || warn "Couldn't delete $src_file" )
-    # Remove picture if it's failed
-    [[ $b_error -eq 0 ]] || rm -f "$dst_file"
+
+    # Remove temp file
+    rm -f "$tmp_file"
 done
 
 #-----------------------------------------------------------------------------------------------------------------------
