@@ -22,12 +22,12 @@ USAGE_INFO="Usage: $0 [options] photos_dir
 Options:
   -B  Do not add a black border to the image
   -D  Do not delete the $dir_upload directory after processing
-  -P  Do not convert to WebP
   -R  Do not resize photos to $pic_size pixels
   -U  Do not upload the photos (implies -D)
   -W  Do not watermark images
   -b  Use black watermark instead of the default white one
   -d  Delete original (after successful processing)
+  -p  Convert the image into WebP
   -s  Use "small" watermark instead of the default one (better for small images)
 
 gphotos-uploader-cli must be configured to use $dir_upload unless -U is specified."
@@ -78,14 +78,14 @@ trap interrupted INT
 # Parse command line options
 b_delete_upload_dir=1
 b_delete_original=0
-b_webp=1
+b_webp=0
 b_resize=1
 b_watermark=1
 b_upload=1
 s_watermark_to_use="$file_watermark_white"
 s_border_options="-bordercolor black -border 2"
 
-args=$(getopt -o BDPRUWbds -- "$@")
+args=$(getopt -o BDRUWbdps -- "$@")
 [ $? -ne 0 ] && usage
 eval set -- $args
 for i; do
@@ -96,10 +96,6 @@ for i; do
             ;;
         -D)
             b_delete_upload_dir=0
-            shift
-            ;;
-        -P)
-            b_webp=0
             shift
             ;;
         -R)
@@ -121,6 +117,10 @@ for i; do
             ;;
         -d)
             b_delete_original=1
+            shift
+            ;;
+        -p)
+            b_webp=1
             shift
             ;;
         -s)
@@ -244,7 +244,7 @@ if [[ $b_upload -ne 0 ]]; then
     if [[ $i_err_count -eq 0 ]]; then
         gphotos-uploader-cli
         rc=$?
-        [[ $rc -eq 0 ]] || warn "gphotos-uploader-cli exited with code $rc"
+        [[ $rc -eq 0 ]] || err "gphotos-uploader-cli exited with code $rc"
 
     # Print out failure list otherwise
     else
