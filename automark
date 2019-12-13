@@ -1,36 +1,32 @@
 #!/bin/bash
 #=======================================================================================================================
 # Description
-#   Script for automated watermarking and uploading photos to Google Photos
+#   Script for automated watermarking of images
 # Requires
 #   ImageMagick
 #   webp (apt install webp) for WebP support
-#   gphotos-uploader-cli (https://github.com/gphotosuploader/gphotos-uploader-cli)
+#   jpegoptim (apt install jpegoptim) for JPEG optimisation support
 # Synopsis
-#   automark [options] picture_dir
+#   automark [options] image_file_or_dir
 #=======================================================================================================================
 
 . "$(dirname "$(realpath "$0")")/common.sh"
 
 # Setup vars
-pic_size=1600                                                      # Max size of the pictures to upload
+pic_size=1600                                                      # Max size of the pictures
+jpeg_quality=50                                                    # Max quality for JPEG optimisation
 file_watermark_white="$HOME/Pictures/Misc/dk-watermark-white.png"  # Default watermark file
 file_watermark_black="$HOME/Pictures/Misc/dk-watermark-black.png"  # Black watermark file
 file_watermark_small="$HOME/Pictures/Misc/dk-watermark-small.png"  # 'Small' watermark file
-dir_upload="$HOME/tmp/gphoto-upload"                               # Path that gphotos-uploader-cli is configured to upload from
-USAGE_INFO="Usage: $0 [options] photos_dir
+USAGE_INFO="Usage: $0 [options] image_file_or_dir
 Options:
-  -B  Do not add a black border to the image
-  -D  Do not delete the $dir_upload directory after processing
+  -O  Do not optimise JPEGs
   -R  Do not resize photos to $pic_size pixels
-  -U  Do not upload the photos (implies -D)
   -W  Do not watermark images
   -b  Use black watermark instead of the default white one
   -d  Delete original (after successful processing)
   -p  Convert the image into WebP
-  -s  Use "small" watermark instead of the default one (better for small images)
-
-gphotos-uploader-cli must be configured to use $dir_upload unless -U is specified."
+  -s  Use "small" watermark instead of the default one (better for small images)"
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -76,35 +72,24 @@ trap interrupted INT
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Parse command line options
-b_delete_upload_dir=1
 b_delete_original=0
 b_webp=0
 b_resize=1
 b_watermark=1
-b_upload=1
+b_optimise=1
 s_watermark_to_use="$file_watermark_white"
-s_border_options="-bordercolor black -border 2"
 
-args=$(getopt -o BDRUWbdps -- "$@")
-[ $? -ne 0 ] && usage
+args=$(getopt -o BDORUWbdps -- "$@")
+[[ $? -ne 0 ]] && usage
 eval set -- $args
 for i; do
     case "$i" in
-        -B)
-            unset s_border_options
-            shift
-            ;;
-        -D)
-            b_delete_upload_dir=0
+        -O)
+            b_optimise=0
             shift
             ;;
         -R)
             b_resize=0
-            shift
-            ;;
-        -U)
-            b_delete_upload_dir=0
-            b_upload=0
             shift
             ;;
         -W)
@@ -135,18 +120,15 @@ for i; do
 done
 
 # Parse the rest of the command line
-dir_photos="$1"
+path_source="$(realpath "$1")"
 
 # Check photos_dir
-[[ -n "$dir_photos" ]] || usage "Directory for photos is not specified"
-[[ -d "$dir_photos" ]] || err "Directory '$dir_photos' does not exist."
+[[ -n "$path_source" ]] || usage "Source image file/directory is not specified"
+[[ -e "$path_source" ]] || err "Source image file/directory '$path_source' does not exist."
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Initialization
 #-----------------------------------------------------------------------------------------------------------------------
-
-# Make sure target dir created
-mkdir -p "$dir_upload" || err "Failed to create target directory $dir_upload"
 
 # Get TTY width
 tty_width=$(stty size | cut -d ' ' -f 2)
@@ -155,15 +137,37 @@ tty_width=$(stty size | cut -d ' ' -f 2)
 # Read the file list
 #-----------------------------------------------------------------------------------------------------------------------
 
-# Temporarily change the field separator to make find results work with filenames containing spaces
-OLDIFS=$IFS
-IFS=$'\n'
+# Get the file(s). If source is a dir
+if [[ -d "$path_source" ]]; then
+    # Temporarily change the field separator to make find results work with filenames containing spaces
+    old_ifs=$IFS
+    IFS=$'\n'
 
-# Get the files
-files=( $(find "$dir_photos" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.webp' \) ! -name '*.w.*' -print | sort) )
+    # Scan for files
+    files=( $(find "$path_source" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.webp' \) ! -name '*.amark.*' -print | sort) )
 
-# Restore the field separator
-IFS=$OLDIFS
+    # Restore the field separator
+    IFS=$old_ifs
+
+    # Make sure target dir is (re)created
+    dir_target="$path_source.automark"
+    [[ -d "$dir_target" ]] && (rm -rf "$dir_target" || err "Failed to remove target directory $dir_target")
+    mkdir -p "$dir_target" || err "Failed to create target directory $dir_target"
+
+# Otherwise verify it's a file
+elif [[ ! -f "$path_source" ]]; then
+    err "$path_source is neither a directory nor a file"
+
+# It's definitely a file
+else
+    # Verify the extension
+    ext="$(echo ${path_source##*.} | tr '[:upper:]' '[:lower:]')"
+    [[ "$ext" != "jpg" ]] && [[ "$ext" != "png" ]] && [[ "$ext" != "webp" ]] && err "Unsupported image file extension: '$ext'"
+    files=("$path_source")
+
+    # Target file will reside in the same directory as the source
+    dir_target="$(dirname "$path_source")"
+fi
 
 i_count=${#files[@]}
 
@@ -174,6 +178,7 @@ i_count=${#files[@]}
 # Iterate through the file list
 i_cur_num=0
 i_err_count=0
+failed_pics=()
 for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     src_file=${files[$((i_cur_num-1))]}
     b_error=0
@@ -186,7 +191,7 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     else
         dst_extension=webp
     fi
-    dst_file="$dir_upload/${src_file_name%\.*}.w.$dst_extension"
+    dst_file="$dir_target/${src_file_name%\.*}.amark.$dst_extension"
 
     # Create a temporary PNG file for processing
     tmp_file="$(mktemp).png"
@@ -202,8 +207,8 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     unset s_resize_flags
     [[ $b_resize -ne 0 ]] && ( [[ -z "$img_size" ]] || [[ $img_size -gt $pic_size ]] ) && s_resize_flags="-resize $pic_size"
 
-    # Resize and autorotate the image, add a border if needed
-    if ! convert $s_resize_flags -quiet -quality 90 -auto-orient $s_border_options "$src_file" "$tmp_file"; then
+    # Resize and autorotate the image
+    if ! convert $s_resize_flags -quiet -quality 96 -auto-orient "$src_file" "$tmp_file"; then
         b_error=1
         warn "Conversion of $src_file failed."
 
@@ -212,15 +217,19 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
         b_error=1
         warn "Watermarking $src_file failed."
 
-    # If successfully processed
-    else
-        # If the format stays PNG, just move the created file into the final destination
-        if [[ "$dst_extension" == "png" ]]; then
-            mv "$tmp_file" "$dst_file" || (b_error=1 && warn "Failed to move $tmp_file to $dst_file")
-        # Otherwise convert it to the target format
-        else
-            convert "$tmp_file" "$dst_file" || (b_error=1 && warn "Failed to convert $tmp_file into $dst_file")
-        fi
+    # If the format stays PNG, just move the created file into the final destination
+    elif [[ "$dst_extension" == "png" ]]; then
+        mv "$tmp_file" "$dst_file" || (b_error=1 && warn "Failed to move $tmp_file to $dst_file")
+
+    # Otherwise convert it to the target format
+    elif ! convert "$tmp_file" "$dst_file"; then
+        b_error=1
+        warn "Failed to convert $tmp_file into $dst_file"
+
+    # Optimise it if it's a JPEG
+    elif [[ "$dst_extension" == "jpg" ]] && [[ $b_optimise -ne 0 ]] && ! jpegoptim --force --max=$jpeg_quality --quiet --strip-all "$dst_file"; then
+        b_error=1
+        warn "Failed to JPEG-optimise $dst_file"
     fi
 
     # If processing succeeded
@@ -238,20 +247,10 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     rm -f "$tmp_file"
 done
 
-#-----------------------------------------------------------------------------------------------------------------------
-if [[ $b_upload -ne 0 ]]; then
-    # If there was no error, upload the processed pictures
-    if [[ $i_err_count -eq 0 ]]; then
-        gphotos-uploader-cli
-        rc=$?
-        [[ $rc -eq 0 ]] || err "gphotos-uploader-cli exited with code $rc"
-
-    # Print out failure list otherwise
-    else
-        warn "There were errors processing following pictures:"
-        for f in ${failed_pics[@]}; do echo "$f" >&2; done
-        warn "Uploading skipped"
-    fi
+# If there were errors, print out failure list
+if [[ $i_err_count -gt 0 ]]; then
+    warn "There were errors processing following pictures:"
+    for f in ${failed_pics[@]}; do echo "$f" >&2; done
 fi
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -260,9 +259,6 @@ fi
 
 status "Done. $i_count files processed."
 echo
-
-# Remove upload dir if needed
-[[ $b_delete_upload_dir -ne 0 ]] && rm -rf "$dir_upload"
 
 [[ $i_err_count -gt 0 ]] && exit 1
 
