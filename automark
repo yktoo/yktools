@@ -6,6 +6,7 @@
 #   ImageMagick
 #   webp (apt install webp) for WebP support
 #   jpegoptim (apt install jpegoptim) for JPEG optimisation support
+#   OptiPNG (apt install optipng) for PNG optimisation support
 # Synopsis
 #   automark [options] image_file_or_dir
 #=======================================================================================================================
@@ -20,7 +21,7 @@ file_watermark_black="$HOME/Pictures/Misc/dk-watermark-black.png"  # Black water
 file_watermark_small="$HOME/Pictures/Misc/dk-watermark-small.png"  # 'Small' watermark file
 USAGE_INFO="Usage: $0 [options] image_file_or_dir
 Options:
-  -O  Do not optimise JPEGs
+  -O  Do not optimise JPEGs/PNGs
   -R  Do not resize photos to $pic_size pixels
   -W  Do not watermark images
   -b  Use black watermark instead of the default white one
@@ -210,7 +211,7 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     # Resize and autorotate the image
     if ! convert $s_resize_flags -quiet -quality 96 -auto-orient "$src_file" "$tmp_file"; then
         b_error=1
-        warn "Conversion of $src_file failed."
+        warn "Conversion of $src_file into $tmp_file failed."
 
     # Apply watermark
     elif ! ( [[ $b_watermark -eq 0 ]] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$tmp_file" "$tmp_file" ); then
@@ -225,11 +226,25 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     elif ! convert "$tmp_file" "$dst_file"; then
         b_error=1
         warn "Failed to convert $tmp_file into $dst_file"
+    fi
 
-    # Optimise it if it's a JPEG
-    elif [[ "$dst_extension" == "jpg" ]] && [[ $b_optimise -ne 0 ]] && ! jpegoptim --force --max=$jpeg_quality --quiet --strip-all "$dst_file"; then
-        b_error=1
-        warn "Failed to JPEG-optimise $dst_file"
+    # Optimise the file if needed
+    if [[ $b_error -eq 0 ]] && [[ $b_optimise -ne 0 ]]; then
+        progress $i_cur_num $i_count "Optimising $src_file"
+        case "$dst_extension" in
+            jpg)
+                if ! jpegoptim --force --max=$jpeg_quality --quiet --strip-all "$dst_file"; then
+                    b_error=1
+                    warn "Failed to JPEG-optimise $dst_file"
+                fi
+                ;;
+            png)
+                if ! optipng -quiet -o 7 "$dst_file"; then
+                    b_error=1
+                    warn "Failed to PNG-optimise $dst_file"
+                fi
+                ;;
+        esac
     fi
 
     # If processing succeeded
