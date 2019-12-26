@@ -206,7 +206,7 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
     # Determine the need for resize. We resize unless it's turned off, and only if picture size is unknown or bigger than
     # the standard size
     unset s_resize_flags
-    [[ $b_resize -ne 0 ]] && ( [[ -z "$img_size" ]] || [[ $img_size -gt $pic_size ]] ) && s_resize_flags="-resize $pic_size"
+    [[ $b_resize -ne 0 ]] && ( [[ -z "$img_size" ]] || [[ $img_size -gt $pic_size ]] ) && s_resize_flags="-resize ${pic_size}x${pic_size}"
 
     # Resize and autorotate the image
     if ! convert $s_resize_flags -quiet -quality 96 -auto-orient "$src_file" "$tmp_file"; then
