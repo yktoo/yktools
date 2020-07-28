@@ -33,6 +33,6 @@ eval $find_cmd |
     xargs dirname |
     while read dir; do
         log "Running ${CLR_OK}git $cmd${CLR_OFF} in $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
-        (cd "$dir" && git $cmd "$@")
+        git -C "$dir" $cmd "$@"
         log '--------------------------------------------------------------------------------'
     done
