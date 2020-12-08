@@ -74,6 +74,13 @@ err() {
     exit 2
 }
 
+# Same as err(), but doesn't exit
+# Arguments:
+#   $1 message
+error() {
+    log "${CLR_ERR}ERROR: $1${CLR_OFF}" "ERROR: $1"
+}
+
 # Displays usage info (taken from the mandatory var USAGE_INFO) and exits
 # Arguments:
 #   $1 optional error message

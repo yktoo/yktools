@@ -10,6 +10,7 @@
 #   $@ - Any arguments to be passed to git
 #=======================================================================================================================
 
+# shellcheck source=./common.sh
 . "$(dirname "$(realpath "$0")")/common.sh"
 
 CODE_ROOT_DIR="$HOME/code"
@@ -33,6 +34,6 @@ eval $find_cmd |
     xargs dirname |
     while read dir; do
         log "Running ${CLR_OK}git $cmd${CLR_OFF} in $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
-        git -C "$dir" $cmd "$@"
+        git -C "$dir" $cmd "$@" || error "git returned non-zero exit code $?"
         log '--------------------------------------------------------------------------------'
     done
