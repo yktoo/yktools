@@ -57,8 +57,6 @@ progress() {
 fetch_image_details() {
     # Fetch image size
     img_size=$(identify -quiet -format "%w %h" "$1" | awk '{print ($1>$2 ? $1 : $2)}') || warn "Determining image size in $1 failed."
-    # Fetch image caption (dataset 2, property 105, see http://www.imagemagick.org/script/escape.php for details)
-    img_caption=$(identify -quiet -format "%[IPTC:2:105]" "$1") || warn "Determining image caption in $1 failed."
 }
 
 #=======================================================================================================================
@@ -214,7 +212,7 @@ for (( i_cur_num=1; i_cur_num<=${i_count}; i_cur_num++ )); do
         warn "Conversion of $src_file into $tmp_file failed."
 
     # Apply watermark
-    elif ! ( [[ $b_watermark -eq 0 ]] || composite -blend 90% -gravity southeast "$s_watermark_to_use" "$tmp_file" "$tmp_file" ); then
+    elif ! ( [[ $b_watermark -eq 0 ]] || composite -dissolve 90% -gravity southeast "$s_watermark_to_use" "$tmp_file" "$tmp_file" ); then
         b_error=1
         warn "Watermarking $src_file failed."
 
