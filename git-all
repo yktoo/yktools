@@ -38,8 +38,10 @@ eval $find_cmd |
     xargs dirname |
     while read -r dir; do
         log "Running ${CLR_OK}git $cmd${CLR_OFF} in $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
-        if ! git -C "$dir" "$cmd" "$@"; then
-            error "git returned non-zero exit code $?"
+        git -C "$dir" "$cmd" "$@"
+        rc=$?
+        if ((rc != 0)); then
+            error "git returned non-zero exit code $rc"
             err_repos+=("$dir")
         fi
         log '--------------------------------------------------------------------------------'
