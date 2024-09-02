@@ -50,11 +50,10 @@ eval $find_cmd |
 # If there was any failure, output a list of failed repositories
 if ((${#err_repos[@]})); then
     echo
-    error "Failed in the following repos:"
+    error "✘ Failed in the following repos:"
     for dir in "${err_repos[@]}"; do
-        dir="$(realpath --relative-to="$PWD" "$dir")"
         echo -e "* $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
     done
 else
-    ok "Succeeded"
+    ok "✔ Succeeded"
 fi
