@@ -54,6 +54,8 @@ if ((${#err_repos[@]})); then
     for dir in "${err_repos[@]}"; do
         echo -e "* $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
     done
-else
-    ok "✔ Succeeded"
+    exit 1
 fi
+
+ok "✔ Succeeded"
+exit 0
