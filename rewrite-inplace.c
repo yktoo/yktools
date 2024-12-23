@@ -1,23 +1,24 @@
 /*********************************************************************
-* Rewrites the contents of the file given on the command line.       *
-*                                                                    *
-* WARNING:                                                           *
-*   This program comes with ABSOLUTELY NO WARRANTY whatsoever, use   *
-*   it entirely at your own risk! The author shall never be held     *
-*   responsible for loss of your data, ruining your hard drive, PC,  *
-*   house, city or planet, including but not limited to wars,        *
-*   hurricanes, famines, global warming or alien invasions, arising  *
-*   from using it.                                                   *
-*                                                                    *
-* Author:                                                            *
-*    Dmitry Kann, http://yktoo.com/                                  *
-*                                                                    *
-* License:                                                           *
-*    LGPL 3.0                                                        *
-*                                                                    *
-* Compile with:                                                      *
-*    gcc rewrite-inplace.c -o rewrite-inplace                        *
-*                                                                    *
+ Rewrites the contents of the file given on the command line. For details, see
+   https://yktoo.com/en/blog/post/2015/07/20-fixing-samsung-ssd-840-evo-performance-issues-in-linux/
+
+ WARNING:
+   This program comes with ABSOLUTELY NO WARRANTY whatsoever, use
+   it entirely at your own risk! The author shall never be held
+   responsible for loss of your data, ruining your hard drive, PC,
+   house, city or planet, including but not limited to wars,
+   hurricanes, famines, global warming or alien invasions, arising
+   from using it.
+
+ Author:
+    Dmitry Kann, https://yktoo.com/
+
+ License:
+    LGPL 3.0
+
+ Compile with:
+    gcc rewrite-inplace.c -o rewrite-inplace
+
 *********************************************************************/
 
 #include <sys/types.h>

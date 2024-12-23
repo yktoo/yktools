@@ -5,7 +5,7 @@
 # Synopsis
 #   shotwell-thumbs [options]
 # Author
-#   Dmitry Kann, http://yktoo.com/
+#   Dmitry Kann, https://yktoo.com/
 # License
 #   Public domain
 #=======================================================================================================================
@@ -15,7 +15,7 @@
 # Setup vars
 DB_FILE="$HOME/.local/share/shotwell/data/photo.db"
 THUMB_BASE_DIR="$HOME/.cache/shotwell/thumbs/"
-USAGE_INFO="Script for (re)generating Shotwell thumbnails. Written by Dmitry Kann, http://yktoo.com/
+USAGE_INFO="Script for (re)generating Shotwell thumbnails. Written by Dmitry Kann, https://yktoo.com/
 
 Usage: $0 [options]
 

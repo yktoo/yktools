@@ -2,7 +2,7 @@
 # Shared library of shell functions
 #=======================================================================================================================
 
-# -- Colors. Coloring reference, from http://www.tldp.org/HOWTO/Bash-Prompt-HOWTO/x329.html:
+# Coloring reference, from https://tldp.org/HOWTO/Bash-Prompt-HOWTO/x329.html
 # Non-printing escape sequences have to be enclosed in \[\033[ and \]. For colour escape sequences, they should also be
 # followed by a lowercase m:
 #

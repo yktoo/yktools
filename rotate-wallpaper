@@ -2,11 +2,11 @@
 #=======================================================================================================================
 # Description
 #   Script to set a random wallpaper in Gnome 3/Unity. See
-#   http://blog.yktoo.com/2011/10/gnome-3-ubuntu-1110-random-wallpaper.html for details.
+#   https://yktoo.com/en/blog/post/2011/10/14-ubuntu/gnome-3-random-wallpaper-script/ for details.
 # Synopsis
 #   rotate-wallpaper
 # Author
-#   Dmitry Kann, http://yktoo.com/
+#   Dmitry Kann, https://yktoo.com/
 # License
 #   Public domain
 #=======================================================================================================================

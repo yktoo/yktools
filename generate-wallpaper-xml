@@ -2,11 +2,11 @@
 #=======================================================================================================================
 # Description
 #   Script to generate an XML file for wallpaper rotation in Gnome 3/Unity. See
-#   http://blog.yktoo.com/2012/11/ubuntu-xml-wallpaper-creation.html for details.
+#   https://yktoo.com/en/blog/post/2012/11/17-ubuntu/gnome-3-xml-wallpaper-creation/ for details.
 # Synopsis
 #   generate-wallpaper-xml [options] <pictures_dir> <xml_file>
 # Author
-#   Dmitry Kann, http://yktoo.com/
+#   Dmitry Kann, https://yktoo.com/
 # License
 #   Public domain
 #=======================================================================================================================
@@ -17,7 +17,7 @@
 def_duration_static=1795
 def_duration_transition=5
 
-USAGE_INFO="XML wallpaper list generation script. Written by Dmitry Kann, http://yktoo.com/
+USAGE_INFO="XML wallpaper list generation script. Written by Dmitry Kann, https://yktoo.com/
 
 Usage: $0 [options] pictures_dir xml_file
 
