@@ -36,6 +36,7 @@ shopt -s lastpipe
 declare -a err_repos=()
 eval $find_cmd |
     xargs dirname |
+    sort |
     while read -r dir; do
         log "Running ${CLR_OK}git $cmd${CLR_OFF} in $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
         git -C "$dir" "$cmd" "$@"
