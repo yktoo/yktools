@@ -1,28 +1,16 @@
 #!/bin/bash
 #=======================================================================================================================
 # Description
-#   Run a git command for all available repositories, starting from $CODE_ROOT_DIR.
-#   NB: it ignores all directories whose name starts with a '_' and everything below them unless you supply '.' as the
-#   first argument (see below).
+#   Run a git command recursively for all git repositories, starting from the current one.
+#   NB: it ignores all directories whose name starts with a '_'.
 # Arguments
-#   $1 - if '.' is passed as first argument, search starts from the current dir instead of $CODE_ROOT_DIR and
-#        directories starting with '_' are not ignored
 #   $@ - Any arguments to be passed to git
 #=======================================================================================================================
 
 # shellcheck source=./common.sh
 . "$(dirname "$(realpath "$0")")/common.sh"
 
-CODE_ROOT_DIR="$HOME/code"
 USAGE_INFO="Usage: $0 <git_command> [arg...]"
-
-if [[ "$1" == '.' ]]; then
-    shift
-    find_cmd="find \"$PWD\" -type d -name .git"
-else
-    # Ignore dirs starting with '_'
-    find_cmd="find \"$CODE_ROOT_DIR\" -type d -name .git ! -path '*/_*'"
-fi
 
 # The first argument must be a git command
 cmd="$1"
@@ -32,9 +20,9 @@ shift
 # Change the pipe behaviour to allow modifying vars in a subshell (https://github.com/koalaman/shellcheck/wiki/SC2031)
 shopt -s lastpipe
 
-# Iterate through all known repositories
+# Iterate through all known repositories, ignoring dirs starting with '_'
 declare -a err_repos=()
-eval $find_cmd |
+find "$PWD" -type d -name .git ! -path '*/_*' |
     xargs dirname |
     sort |
     while read -r dir; do
