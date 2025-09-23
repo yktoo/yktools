@@ -22,7 +22,7 @@ shopt -s lastpipe
 
 # Iterate through all known repositories, ignoring dirs starting with '_'
 declare -a err_repos=()
-find "$PWD" -type d -name .git ! -path '*/_*' |
+find . -type d -name .git ! -path '*/_*' |
     xargs dirname |
     sort |
     while read -r dir; do
