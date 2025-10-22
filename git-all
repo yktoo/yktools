@@ -22,8 +22,9 @@ shopt -s lastpipe
 
 # Iterate through all known repositories, ignoring dirs starting with '_'
 declare -a err_repos=()
-find . -type d -name .git ! -path '*/_*' |
+find -type d -name .git ! -path '*/_*' |
     xargs dirname |
+    xargs realpath |
     sort |
     while read -r dir; do
         log "Running ${CLR_OK}git $cmd${CLR_OFF} in $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
@@ -41,7 +42,7 @@ if ((${#err_repos[@]})); then
     echo
     error "✘ Failed in the following repos:"
     for dir in "${err_repos[@]}"; do
-        echo -e "* $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
+        echo -e "• $(dirname "$dir")/${CLR_VAR}$(basename "$dir")${CLR_OFF}"
     done
     exit 1
 fi
