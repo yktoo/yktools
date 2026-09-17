@@ -42,14 +42,16 @@ unset LOG_FILE
 log() {
     date="$(date +%T)"
     echo -e "${CLR_DATE}${date}${CLR_OFF} $1"
-    [[ -n "$LOG_FILE" ]] && echo "$date ${2:-$1}" >> "$LOG_FILE"
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        echo "$date ${2:-$1}" >> "$LOG_FILE"
+    fi
 }
 
 # Logs a normal message
 # Arguments:
 #   $1 message
 info() {
-    log "i $1" "$2"
+    log "i $1" "${2:-}"
 }
 
 # Logs a success message
